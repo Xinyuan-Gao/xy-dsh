@@ -25,7 +25,13 @@ DeepSeek Harness 的会话级 Context Lens。读取 `sessionStats` 与 `tokenUsa
 
 ## 安装
 
-属于 [xy-dsh](../) 集合，clone 之后把本目录 link 进 profile：
+属于 [xy-dsh](../) 集合。直接装：
+
+```bash
+dsh plugin --profile web add "github:Xinyuan-Gao/xy-dsh#path:xy-dsh-context"
+```
+
+要改代码就先 clone，再用 `link:` 装：
 
 ```bash
 git clone https://github.com/Xinyuan-Gao/xy-dsh.git

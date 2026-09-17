@@ -60,13 +60,19 @@ AppKit 自带的拖拽（`performDrag`、`isMovableByWindowBackground`）对「�
 
 ## 安装
 
-属于 [xy-dsh](../) 集合，clone 之后把本目录 link 进 profile：
+属于 [xy-dsh](../) 集合。直接装：
+
+```bash
+dsh plugin --profile desktop add "github:Xinyuan-Gao/xy-dsh#path:xy-dsh-lamp"
+dsh plugin --profile web add "github:Xinyuan-Gao/xy-dsh#path:xy-dsh-lamp"
+```
+
+要改代码就先 clone，再用 `link:` 装：
 
 ```bash
 git clone https://github.com/Xinyuan-Gao/xy-dsh.git
 cd xy-dsh
 dsh plugin --profile desktop add link:"$PWD/xy-dsh-lamp"
-dsh plugin --profile web add link:"$PWD/xy-dsh-lamp"
 ```
 
 然后重启 DSH Desktop，或重启 `dsh web`。
