@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DSH LAMP</title>
+  <style>
+    :root {
+      --bg: #0a0e1a;
+      --line: #2a3050;
+      --edge: rgba(255, 255, 255, .10);
+      --sheen: rgba(255, 255, 255, .05);
+      --amber: #ffa02f;
+      --up: #00b96b;
+      --down: #f23645;
+      --mute: #5e6680;
+      --ink: #e8ecf4;
+      --idle: #3a425c;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      background: transparent;
+      overflow: hidden;
+    }
+    body {
+      font-family: "SF Mono", ui-monospace, Menlo, "PingFang SC", "Hiragino Sans GB", monospace;
+      font-size: 11px;
+      color: var(--ink);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ---- expanded board ---- */
+    .card {
+      display: inline-flex;
+      flex-direction: column;
+      /* Always the natural content width: never constrain this against the
+         window, or the host can shrink the window to the collapsed size and
+         the card would then measure itself against that tiny viewport. */
+      width: max-content;
+      background: var(--bg);
+      border: 1px solid var(--edge);
+      border-radius: 10px;
+      box-shadow: inset 0 1px 0 var(--sheen);
+      overflow: hidden;
+      white-space: nowrap;
+      user-select: none;
+      -webkit-user-select: none;
+      cursor: grab;
+    }
+    .card[hidden] { display: none; }
+    .card:active { cursor: grabbing; }
+
+    .head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 6px 5px 9px;
+      border-bottom: 1px solid var(--line);
+      line-height: 1.2;
+    }
+    .head[data-flat="1"] { border-bottom: 0; padding-bottom: 6px; }
+    .mark { color: var(--amber); font-weight: 500; letter-spacing: .02em; }
+    .head[data-tone="idle"] .mark { color: var(--mute); }
+    .head[data-tone="err"] .mark { color: var(--down); }
+    .head[data-tone="ok"] .mark { color: var(--up); }
+    .note { color: var(--ink); }
+    .gap { flex: 1 1 auto; min-width: 10px; }
+    .clock { color: var(--mute); font-variant-numeric: tabular-nums; }
+
+    .fold {
+      flex: 0 0 auto;
+      width: 15px;
+      height: 15px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      background: transparent;
+      color: var(--mute);
+      font: inherit;
+      font-size: 11px;
+      line-height: 1;
+      cursor: pointer;
+      -webkit-appearance: none;
+    }
+    .fold:hover { border-color: var(--amber); color: var(--amber); }
+    .fold:active { background: var(--line); }
+
+    .lang {
+      flex: 0 0 auto;
+      height: 15px;
+      min-width: 15px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 3px;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      background: transparent;
+      color: var(--mute);
+      font: inherit;
+      font-size: 10px;
+      line-height: 1;
+      cursor: pointer;
+      -webkit-appearance: none;
+    }
+    .lang:hover { border-color: var(--amber); color: var(--amber); }
+    .lang:active { background: var(--line); }
+
+    .cells { display: flex; align-items: stretch; }
+    .cells[hidden] { display: none; }
+    .cell {
+      flex: 1 1 auto;
+      min-width: 56px;
+      padding: 4px 7px 6px;
+      border-right: 1px solid var(--line);
+    }
+    .cell:last-child { border-right: 0; }
+    .k { font-size: 9px; color: var(--mute); letter-spacing: .06em; }
+    .v { margin-top: 2px; display: flex; align-items: center; gap: 5px; line-height: 1.2; }
+
+    /* ---- lamps ---- */
+    .lamp { width: 6px; height: 6px; background: var(--c, var(--idle)); flex: 0 0 auto; }
+    .lamp[data-state="idle"] { --c: var(--idle); }
+    .lamp[data-state="run"] { --c: var(--amber); }
+    .lamp[data-state="wait"] { --c: var(--amber); animation: blink 1s steps(1) infinite; }
+    .lamp[data-state="err"] { --c: var(--down); }
+    .lamp[data-state="done"] { --c: var(--up); }
+    @keyframes blink { 0%, 49% { opacity: 1 } 50%, 100% { opacity: .3 } }
+    @media (prefers-reduced-motion: reduce) { .lamp { animation: none !important } }
+
+    /* ---- collapsed: a single lamp ---- */
+    .mini {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 30px;
+      height: 30px;
+      background: var(--bg);
+      border: 1px solid var(--edge);
+      border-radius: 10px;
+      box-shadow: inset 0 1px 0 var(--sheen);
+      cursor: grab;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .mini[hidden] { display: none; }
+    .mini:active { cursor: grabbing; }
+    .mini .lamp { width: 10px; height: 10px; border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <div class="card" id="card">
+    <div class="head" id="head" data-tone="run">
+      <span class="mark" id="mark">IDLE</span>
+      <span class="note" id="note">ROOT</span>
+      <span class="gap"></span>
+      <span class="clock" id="clock">00:00:00</span>
+      <button class="lang" id="lang" type="button">中</button>
+      <button class="fold" id="fold" type="button" title="收起灯板">&#8722;</button>
+    </div>
+    <div class="cells" id="cells"></div>
+  </div>
+
+  <div class="mini" id="mini" title="展开灯板" hidden>
+    <span class="lamp" id="minilamp" data-state="idle"></span>
+  </div>
+
+  <script>
+    /* Two label sets. `mark` is the headline word in the header, `cell` is the
+       word under each lamp (English distinguishes DONE from OK). Agent codes
+       come from the host as ROOT / A1 / A2…, so the Chinese set renames them
+       主 / 子1 / 子2… at render time. */
+    const LANGS = {
+      zh: {
+        mark: { idle: '待命', run: '工作中', wait: '等你', err: '出错', done: '完成' },
+        cell: { idle: '待命', run: '工作中', wait: '等你', err: '出错', done: '完成' },
+        root: '主',
+        child: (n) => `子${n}`,
+        fold: '收起灯板',
+        unfold: '展开灯板',
+        swap: '切换中英文',
+      },
+      en: {
+        mark: { idle: 'IDLE', run: 'RUN', wait: 'ASK', err: 'ERR', done: 'DONE' },
+        cell: { idle: 'IDLE', run: 'RUN', wait: 'ASK', err: 'ERR', done: 'OK' },
+        root: 'ROOT',
+        child: (n) => `A${n}`,
+        fold: 'Collapse board',
+        unfold: 'Expand board',
+        swap: 'Switch language',
+      },
+    }
+
+    const el = {
+      card: document.getElementById('card'),
+      head: document.getElementById('head'),
+      mark: document.getElementById('mark'),
+      note: document.getElementById('note'),
+      clock: document.getElementById('clock'),
+      cells: document.getElementById('cells'),
+      fold: document.getElementById('fold'),
+      lang: document.getElementById('lang'),
+      mini: document.getElementById('mini'),
+      minilamp: document.getElementById('minilamp'),
+    }
+
+    let collapsed = false
+    let lang = 'zh'
+    // Once the button is used, the local choice wins: a poll that started
+    // before the POST landed must not flip the labels back.
+    let langPinned = false
+    let lastTitle = ''
+    let lastData = { mark: 'IDLE', note: 'ROOT', elapsedMs: 0, agents: [] }
+
+    const L = () => LANGS[lang] || LANGS.zh
+
+    /** ROOT / A3 are the host's identifiers; show them the reader's way. */
+    function codeLabel(code) {
+      const text = String(code ?? '')
+      const child = /^A(\d+)$/.exec(text)
+      if (child) return L().child(child[1])
+      return text === 'ROOT' ? L().root : text
+    }
+
+    function fmt(ms) {
+      const s = Math.floor((Number(ms) || 0) / 1000)
+      const m = Math.floor(s / 60)
+      const h = Math.floor(m / 60)
+      return `${String(h).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
+    }
+
+    /** One lamp colour for the whole run: error > waiting > done > running > idle. */
+    function overall(data, agents) {
+      const mark = data.mark || 'IDLE'
+      if (mark === 'ERR' || agents.some((a) => a.state === 'err')) return 'err'
+      if (mark === 'ASK' || agents.some((a) => a.state === 'wait')) return 'wait'
+      if (mark === 'DONE') return 'done'
+      if (agents.some((a) => a.state === 'run')) return 'run'
+      if (agents.length && agents.every((a) => a.state === 'done')) return 'done'
+      return 'idle'
+    }
+
+    function paint(data) {
+      lastData = data || lastData
+      const agents = Array.isArray(lastData.agents) ? lastData.agents : []
+      const state = overall(lastData, agents)
+      const isDone = state === 'done'
+      lastTitle = lastData.title || ''
+      if (!langPinned && (lastData.lang === 'zh' || lastData.lang === 'en')) lang = lastData.lang
+
+      // A finished run folds to a single line: DONE  <done>/<total>  <clock>
+      const total = agents.length
+      const doneCount = agents.filter((a) => a.state === 'done').length
+      const line = isDone ? `${String(doneCount).padStart(2, '0')}/${String(total).padStart(2, '0')}` : ''
+
+      el.head.dataset.tone = state === 'err' ? 'err' : state === 'idle' ? 'idle' : isDone ? 'ok' : 'run'
+      el.head.dataset.flat = isDone ? '1' : '0'
+      el.mark.textContent = L().mark[state] || L().mark.idle
+      el.note.textContent = isDone ? line : codeLabel(lastData.note || 'ROOT')
+      el.note.style.color = isDone ? 'var(--mute)' : ''
+      el.clock.textContent = fmt(lastData.elapsedMs)
+
+      el.cells.hidden = isDone
+      if (!isDone) {
+        const list = agents.length ? agents : [{ code: 'ROOT', state: 'idle' }]
+        el.cells.innerHTML = list.map((a) => `
+          <div class="cell">
+            <div class="k">${codeLabel(a.code)}</div>
+            <div class="v"><span class="lamp" data-state="${a.state}"></span>${L().cell[a.state] || L().cell.idle}</div>
+          </div>`).join('')
+      }
+
+      el.lang.textContent = lang === 'zh' ? '中' : 'EN'
+      el.lang.title = L().swap
+      el.fold.title = L().fold
+      el.minilamp.dataset.state = state
+      el.mini.title =
+        `${L().mark[state] || L().mark.idle}${line ? ' ' + line : ''}  ${fmt(lastData.elapsedMs)}`
+        + `${lastTitle ? '  ·  ' + lastTitle : ''}`
+
+      el.card.hidden = collapsed
+      el.mini.hidden = !collapsed
+      syncSize()
+    }
+
+    /* Report the natural content size so the host can fit the window to it. */
+    let sentW = 0
+    let sentH = 0
+    function syncSize() {
+      const box = (collapsed ? el.mini : el.card).getBoundingClientRect()
+      const w = Math.ceil(box.width)
+      const h = Math.ceil(box.height)
+      if (w === sentW && h === sentH) return
+      sentW = w
+      sentH = h
+      try { window.webkit.messageHandlers.size.postMessage({ w, h }) } catch {}
+    }
+
+    function toggle(next) {
+      collapsed = typeof next === 'boolean' ? next : !collapsed
+      el.card.hidden = collapsed
+      el.mini.hidden = !collapsed
+      // Re-measure from scratch: the two faces never share a size.
+      sentW = 0
+      sentH = 0
+      syncSize()
+    }
+
+    el.fold.addEventListener('click', (e) => { e.stopPropagation(); toggle(true) })
+
+    el.lang.addEventListener('click', (e) => {
+      e.stopPropagation()
+      lang = lang === 'zh' ? 'en' : 'zh'
+      langPinned = true
+      paint(lastData)
+      // Same origin as the page, so the board persists the choice itself.
+      try { fetch('/lang', { method: 'POST', body: lang }) } catch {}
+    })
+
+    /* ---- moving the board ----
+       AppKit's own drag machinery (performDrag, movable-by-background) is a
+       no-op for this borderless transparent window, and the page cannot name a
+       screen position either: this WKWebView reports window.screenX/screenY as
+       garbage. So the page only reports WHEN the pointer moved, and the host
+       reads the real cursor with NSEvent.mouseLocation. The host also owns the
+       click/drag decision, because the window follows the pointer and the
+       viewport-relative coordinates here stay still during a drag. */
+    let dragging = false
+
+    function sendDrag(phase) {
+      try { window.webkit.messageHandlers.drag.postMessage({ phase }) } catch {}
+    }
+
+    function onDown(e) {
+      if (e.button !== 0) return
+      if (e.target.closest && e.target.closest('.fold, .lang')) return
+      dragging = true
+      sendDrag('start')
+      // Capture on a stable node: the cell markup is replaced on every repaint.
+      try { (collapsed ? el.mini : el.card).setPointerCapture(e.pointerId) } catch {}
+      e.preventDefault()
+    }
+
+    function onMove() {
+      if (dragging) sendDrag('move')
+    }
+
+    function onUp() {
+      if (!dragging) return
+      dragging = false
+      sendDrag('end')
+    }
+
+    // Called back by the host when a gesture turned out to be a click, not a drag.
+    window.__lampClick = () => {
+      if (collapsed) toggle(false)
+    }
+
+    document.addEventListener('pointerdown', onDown, true)
+    document.addEventListener('pointermove', onMove, true)
+    document.addEventListener('pointerup', onUp, true)
+    document.addEventListener('pointercancel', onUp, true)
+
+    async function tick() {
+      try {
+        const res = await fetch('/api', { cache: 'no-store' })
+        paint(await res.json())
+      } catch {}
+    }
+    // Render the idle face in the default language before the first poll lands.
+    paint(lastData)
+    tick()
+    setInterval(tick, 400)
+  </script>
+</body>
+</html>

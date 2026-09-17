@@ -1,0 +1,33 @@
+{
+  "name": "xy-dsh-lamp",
+  "version": "0.1.0",
+  "description": "DSH 终端灯板：每个 Agent 一盏灯，完成后收成一条消息，可置顶常驻",
+  "type": "module",
+  "main": "index.mjs",
+  "license": "MIT",
+  "keywords": ["dsh", "dsh-plugin", "notify"],
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "exports": {
+    ".": {
+      "default": "./index.mjs"
+    },
+    "./client": "./client/index.mjs",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.mjs",
+    "overlay.html",
+    "hud.swift",
+    "client",
+    "cordis.patch.yml",
+    "README.md"
+  ]
+}

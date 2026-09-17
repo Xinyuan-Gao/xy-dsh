@@ -1,0 +1,37 @@
+{
+  "name": "xy-dsh-context",
+  "version": "0.1.0",
+  "description": "Context Lens for DeepSeek Harness: Turns / Steps / Cache hit / Output",
+  "type": "module",
+  "main": "index.mjs",
+  "license": "MIT",
+  "keywords": ["dsh", "dsh-plugin", "context"],
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-locale"
+      ],
+      "platform": "web"
+    }
+  },
+  "exports": {
+    ".": {
+      "default": "./index.mjs"
+    },
+    "./client": "./client/index.mjs",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.mjs",
+    "client",
+    "cordis.patch.yml",
+    "README.md"
+  ]
+}

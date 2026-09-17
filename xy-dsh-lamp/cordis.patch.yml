@@ -1,0 +1,7 @@
+- insert:
+    - id: xy-dsh-lamp
+      name: xy-dsh-lamp
+      config:
+        enabled: true
+        notify: true
+        sound: true
