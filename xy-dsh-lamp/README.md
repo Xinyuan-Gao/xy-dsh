@@ -4,6 +4,8 @@ DeepSeek Harness 终端灯板。Host 会拉起一条 **系统级置顶窗**：�
 
 macOS 用独立 HUD（`canJoinAllSpaces`）。DSH 退出后灯板会自己关掉。界面里不挂任何卡片。
 
+![灯板动画：从开工到收成一行](../docs/lamp.gif)
+
 ## 语言
 
 **默认中文。** 标题栏那个 `中` / `EN` 按钮切换语言，点一下立刻换。选择会写到 `~/.dsh/xy-dsh-lamp.json`，重启 DSH 后仍然生效（改 `index.mjs` 这类宿主代码需要重启 DSH 才会加载，只改页面不用）。
@@ -19,6 +21,10 @@ macOS 用独立 HUD（`canJoinAllSpaces`）。DSH 退出后灯板会自己关掉
 Agent 代号在中文下也会跟着变：`ROOT` → `主`，`A1` / `A2` → `子1` / `子2`。这只是显示，宿主内部仍然用 `ROOT` / `A1`。
 
 首次安装的默认语言由配置里的 `lang` 决定（见文末），一旦用按钮切过，按钮的选择优先。
+
+同一块灯板，两种语言（上图中文、下图 English）：
+
+![中英对照](../docs/lamp-lang.png)
 
 ## 移动
 
@@ -47,6 +53,8 @@ AppKit 自带的拖拽（`performDrag`、`isMovableByWindowBackground`）对「�
 尺寸是 WKWebView 里实测的；中文字宽所以 6 灯时比英文略宽一点。
 
 ## 多个会话
+
+![三个项目并行](../docs/lamp-sessions.png)
 
 **一个会话一行。** 并行开几个项目时，每个有主 Agent 在跑的会话各占一行，左列是项目名（取会话工作目录的最后一段），右边是该会话的灯。项目名太长会折行，鼠标悬停显示完整名字和会话标题。
 

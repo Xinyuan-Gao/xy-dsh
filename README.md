@@ -2,10 +2,18 @@
 
 自己用的 [DeepSeek Harness](https://github.com/deepseek-ai) 插件集合。
 
+![三个项目并行时的灯板](docs/lamp-sessions.png)
+
 | 插件 | 做什么 | 状态 |
 |---|---|---|
 | [xy-dsh-lamp](./xy-dsh-lamp) | macOS 系统级置顶灯板。每个 Agent 一盏灯，多个项目并行时一个会话一行；全绿后收成一行 `完成 04/04`。整块可拖、可收起成一个灯、中英可切。 | 日常在用 |
 | [xy-dsh-context](./xy-dsh-context) | 会话级 Context Lens。在输入区上方显示 Turns / Steps / Cache hit / Output。 | 原型，没长期用 |
+
+灯板从开工到收成一行是这样走的：
+
+![灯板动画](docs/lamp.gif)
+
+图都是 `docs/make-assets.py` 用真实浏览器引擎渲染 `overlay.html` 生成的，不是录屏，所以不会带上桌面上的任何东西。想重新出图就跑那个脚本。
 
 ## 安装
 
