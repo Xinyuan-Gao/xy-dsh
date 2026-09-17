@@ -109,8 +109,28 @@
     .lang:hover { border-color: var(--amber); color: var(--amber); }
     .lang:active { background: var(--line); }
 
-    .cells { display: flex; align-items: stretch; }
-    .cells[hidden] { display: none; }
+    /* One row per session; the left column names the project. */
+    .rows { display: flex; flex-direction: column; }
+    .rows[hidden] { display: none; }
+    .row { display: flex; align-items: stretch; border-bottom: 1px solid var(--line); }
+    .row:last-child { border-bottom: 0; }
+    .who {
+      flex: 0 0 auto;
+      display: flex;
+      align-items: center;
+      width: 74px;
+      padding: 4px 7px 5px 9px;
+      border-right: 1px solid var(--line);
+      font-size: 9px;
+      line-height: 1.25;
+      letter-spacing: .04em;
+      color: var(--mute);
+      overflow: hidden;
+    }
+    /* The card sets nowrap for the rows; the label must opt back into wrapping.
+       min-width:0 is also required, or the flex item refuses to shrink. */
+    .who > span { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+    .card[data-who="0"] .who { display: none; }
     .cell {
       flex: 1 1 auto;
       min-width: 56px;
@@ -161,7 +181,7 @@
       <button class="lang" id="lang" type="button">中</button>
       <button class="fold" id="fold" type="button" title="收起灯板">&#8722;</button>
     </div>
-    <div class="cells" id="cells"></div>
+    <div class="rows" id="rows"></div>
   </div>
 
   <div class="mini" id="mini" title="展开灯板" hidden>
@@ -182,6 +202,7 @@
         fold: '收起灯板',
         unfold: '展开灯板',
         swap: '切换中英文',
+        sessions: (n) => `${n} 个会话`,
       },
       en: {
         mark: { idle: 'IDLE', run: 'RUN', wait: 'ASK', err: 'ERR', done: 'DONE' },
@@ -191,6 +212,7 @@
         fold: 'Collapse board',
         unfold: 'Expand board',
         swap: 'Switch language',
+        sessions: (n) => `${n} sessions`,
       },
     }
 
@@ -200,7 +222,7 @@
       mark: document.getElementById('mark'),
       note: document.getElementById('note'),
       clock: document.getElementById('clock'),
-      cells: document.getElementById('cells'),
+      rows: document.getElementById('rows'),
       fold: document.getElementById('fold'),
       lang: document.getElementById('lang'),
       mini: document.getElementById('mini'),
@@ -225,6 +247,25 @@
       return text === 'ROOT' ? L().root : text
     }
 
+    /** One row per session. An older host sends only a flat agent list — treat
+        that as a single unnamed session so the board still renders. */
+    function sessionsOf(data) {
+      if (Array.isArray(data.sessions) && data.sessions.length) return data.sessions
+      const agents = Array.isArray(data.agents) ? data.agents : []
+      return [{
+        id: 'all',
+        name: '',
+        title: data.title || '',
+        active: data.note || 'ROOT',
+        agents,
+      }]
+    }
+
+    function esc(text) {
+      return String(text ?? '').replace(/[&<>"]/g, (c) => (
+        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+    }
+
     function fmt(ms) {
       const s = Math.floor((Number(ms) || 0) / 1000)
       const m = Math.floor(s / 60)
@@ -245,7 +286,8 @@
 
     function paint(data) {
       lastData = data || lastData
-      const agents = Array.isArray(lastData.agents) ? lastData.agents : []
+      const sessions = sessionsOf(lastData)
+      const agents = sessions.flatMap((s) => (Array.isArray(s.agents) ? s.agents : []))
       const state = overall(lastData, agents)
       const isDone = state === 'done'
       lastTitle = lastData.title || ''
@@ -255,22 +297,37 @@
       const total = agents.length
       const doneCount = agents.filter((a) => a.state === 'done').length
       const line = isDone ? `${String(doneCount).padStart(2, '0')}/${String(total).padStart(2, '0')}` : ''
+      // How many sessions are actually running, and how many rows we had to drop.
+      const count = Number(lastData.count) || sessions.length
+      const hidden = Math.max(0, count - sessions.length)
 
       el.head.dataset.tone = state === 'err' ? 'err' : state === 'idle' ? 'idle' : isDone ? 'ok' : 'run'
       el.head.dataset.flat = isDone ? '1' : '0'
       el.mark.textContent = L().mark[state] || L().mark.idle
-      el.note.textContent = isDone ? line : codeLabel(lastData.note || 'ROOT')
+      el.note.textContent = isDone
+        ? line
+        : count > 1
+          ? `${L().sessions(count)}${hidden ? ` +${hidden}` : ''}`
+          : codeLabel(sessions[0]?.active || lastData.note || 'ROOT')
       el.note.style.color = isDone ? 'var(--mute)' : ''
       el.clock.textContent = fmt(lastData.elapsedMs)
 
-      el.cells.hidden = isDone
+      // The project column only earns its width when there is a name to show.
+      el.card.dataset.who = sessions.some((s) => s.name) ? '1' : '0'
+      el.rows.hidden = isDone
       if (!isDone) {
-        const list = agents.length ? agents : [{ code: 'ROOT', state: 'idle' }]
-        el.cells.innerHTML = list.map((a) => `
-          <div class="cell">
-            <div class="k">${codeLabel(a.code)}</div>
-            <div class="v"><span class="lamp" data-state="${a.state}"></span>${L().cell[a.state] || L().cell.idle}</div>
-          </div>`).join('')
+        el.rows.innerHTML = sessions.map((s) => {
+          const list = s.agents && s.agents.length ? s.agents : [{ code: 'ROOT', state: 'idle' }]
+          const tip = [s.name, s.title].filter(Boolean).join(' · ')
+          return `<div class="row">
+            <span class="who" title="${esc(tip)}"><span>${esc(s.name)}</span></span>
+            ${list.map((a) => `
+              <div class="cell">
+                <div class="k">${esc(codeLabel(a.code))}</div>
+                <div class="v"><span class="lamp" data-state="${esc(a.state)}"></span>${esc(L().cell[a.state] || L().cell.idle)}</div>
+              </div>`).join('')}
+          </div>`
+        }).join('')
       }
 
       el.lang.textContent = lang === 'zh' ? '中' : 'EN'

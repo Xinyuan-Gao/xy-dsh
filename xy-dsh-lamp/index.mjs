@@ -171,6 +171,34 @@ function reasonState(kind) {
   return 'done'
 }
 
+/** Which project a session belongs to: the last segment of its working directory. */
+function projectName(session) {
+  const cwd = session?.header?.cwd
+  if (typeof cwd !== 'string') return ''
+  const parts = cwd.replace(/[/\\]+$/, '').split(/[/\\]/)
+  return parts[parts.length - 1] || ''
+}
+
+/** Rows shown on the board, and cells inside one row. */
+const MAX_SESSIONS = 6
+const MAX_CELLS = 6
+
+/** Urgency order for rows: something broke, then something waits, then runs. */
+function stateRank(state) {
+  if (state === 'err') return 0
+  if (state === 'wait') return 1
+  if (state === 'run') return 2
+  return 3
+}
+
+function rollUp(members) {
+  if (members.some((a) => a.state === 'err')) return 'err'
+  if (members.some((a) => a.state === 'wait')) return 'wait'
+  if (members.some((a) => a.state === 'run')) return 'run'
+  if (members.length > 0 && members.every((a) => a.state === 'done')) return 'done'
+  return 'idle'
+}
+
 export function apply(ctx, config = {}) {
   const enabled = config.enabled !== false
   const doNotify = config.notify !== false
@@ -192,6 +220,7 @@ export function apply(ctx, config = {}) {
       id,
       origin: session.header?.origin,
       parent: session.header?.parentSession ? String(session.header.parentSession) : null,
+      name: projectName(session),
       code: 'ROOT',
       state: 'idle',
       reason: null,
@@ -248,38 +277,71 @@ export function apply(ctx, config = {}) {
 
   const snapshot = () => {
     const now = Date.now()
-    const rows = [...agents.values()].filter((a) => {
+    const live = [...agents.values()].filter((a) => {
       if (a.state === 'run' || a.state === 'wait' || a.state === 'err') return true
       if (a.endedAt && now - a.endedAt < 90_000) return true
       return false
     })
-    const roots = rows.filter((a) => a.origin !== 'subagent')
-    const focus = roots.find((a) => a.state === 'run' || a.state === 'wait' || a.state === 'err')
-      || roots[0]
-      || rows[0]
-    const family = focus
-      ? rows.filter((a) => a.id === focus.id || a.parent === focus.id)
-      : rows.slice(0, 6)
-    const list = family.slice(0, 6)
-    const running = list.some((a) => a.state === 'run' || a.state === 'wait')
-    const waiting = list.some((a) => a.state === 'wait')
-    const erred = list.some((a) => a.state === 'err')
-    const allDone = list.length > 0 && list.every((a) => a.state === 'done')
-    const started = Math.min(...list.map((a) => a.startedAt || now))
-    const ended = Math.max(...list.map((a) => a.endedAt || 0), 0)
-    const elapsedMs = running
-      ? now - (Number.isFinite(started) ? started : now)
-      : ended && started ? Math.max(0, ended - started) : 0
-    const nn = String(list.length).padStart(2, '0')
+
+    // One row per root session. Picking a single "focus" root used to hide every
+    // other project that had a main agent running.
+    const roots = live.filter((a) => a.origin !== 'subagent')
+    roots.sort((a, b) => {
+      const byState = stateRank(a.state) - stateRank(b.state)
+      if (byState !== 0) return byState
+      return (b.endedAt || b.startedAt || 0) - (a.endedAt || a.startedAt || 0)
+    })
+    const shown = roots.slice(0, MAX_SESSIONS)
+
+    const families = shown.map((root) => {
+      const kids = live
+        .filter((a) => a.parent === root.id)
+        .sort((a, b) => a.code.localeCompare(b.code, 'en', { numeric: true }))
+      return { root, members: [root, ...kids].slice(0, MAX_CELLS) }
+    })
+
+    const everyMember = families.flatMap((f) => f.members)
+    const running = everyMember.some((a) => a.state === 'run' || a.state === 'wait')
+    const waiting = everyMember.some((a) => a.state === 'wait')
+    const erred = everyMember.some((a) => a.state === 'err')
+    const allDone = everyMember.length > 0 && everyMember.every((a) => a.state === 'done')
+
+    const sessions = families.map(({ root, members }) => {
+      const started = Math.min(...members.map((a) => a.startedAt || now))
+      const ended = Math.max(...members.map((a) => a.endedAt || 0), 0)
+      const busy = members.some((a) => a.state === 'run' || a.state === 'wait')
+      return {
+        id: root.id,
+        name: root.name || '',
+        title: root.title || '',
+        state: rollUp(members),
+        active: members.find((a) => a.state === 'run' || a.state === 'wait' || a.state === 'err')?.code
+          || root.code,
+        elapsedMs: busy
+          ? now - (Number.isFinite(started) ? started : now)
+          : ended && started ? Math.max(0, ended - started) : 0,
+        agents: members.map((a) => ({ id: a.id, code: a.code, state: a.state })),
+      }
+    })
+
+    // Total elapsed: how long the oldest still-running agent has been going.
+    const busyMembers = everyMember.filter((a) => a.state === 'run' || a.state === 'wait')
+    const elapsedMs = busyMembers.length
+      ? now - Math.min(...busyMembers.map((a) => a.startedAt || now))
+      : Math.max(0, ...sessions.map((s) => s.elapsedMs), 0)
+
+    const nn = String(everyMember.length).padStart(2, '0')
     return {
-      mode: allDone ? 'done' : running ? 'work' : list.length ? 'work' : 'idle',
+      mode: allDone ? 'done' : everyMember.length ? 'work' : 'idle',
       mark: erred ? 'ERR' : waiting ? 'ASK' : allDone ? 'DONE' : running ? 'RUN' : 'IDLE',
-      note: list.find((a) => a.state === 'run' || a.state === 'wait' || a.state === 'err')?.code || 'ROOT',
+      note: sessions[0]?.active || 'ROOT',
       elapsedMs,
-      agents: list.map((a) => ({ id: a.id, code: a.code, state: a.state })),
+      count: roots.length,
+      sessions,
+      agents: everyMember.map((a) => ({ id: a.id, code: a.code, state: a.state })),
       doneText: `DONE  ${nn}/${nn}`,
       lang,
-      title: focus?.title || '',
+      title: sessions[0]?.title || '',
     }
   }
 

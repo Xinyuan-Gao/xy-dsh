@@ -4,7 +4,7 @@
 
 | 插件 | 做什么 | 状态 |
 |---|---|---|
-| [xy-dsh-lamp](./xy-dsh-lamp) | macOS 系统级置顶灯板。每个 Agent 一盏灯，全绿后收成一行 `完成 04/04`。整块可拖、可收起成一个灯、中英可切。 | 日常在用 |
+| [xy-dsh-lamp](./xy-dsh-lamp) | macOS 系统级置顶灯板。每个 Agent 一盏灯，多个项目并行时一个会话一行；全绿后收成一行 `完成 04/04`。整块可拖、可收起成一个灯、中英可切。 | 日常在用 |
 | [xy-dsh-context](./xy-dsh-context) | 会话级 Context Lens。在输入区上方显示 Turns / Steps / Cache hit / Output。 | 原型，没长期用 |
 
 ## 安装
