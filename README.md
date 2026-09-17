@@ -11,9 +11,13 @@
 
 灯板从开工到收成一行是这样走的：
 
-![灯板动画](docs/lamp.gif)
+![灯板介绍](docs/lamp-intro.gif)
 
-图都是 `docs/make-assets.py` 用真实浏览器引擎渲染 `overlay.html` 生成的，不是录屏，所以不会带上桌面上的任何东西。想重新出图就跑那个脚本。
+它浮在别的窗口之上，这张是真实桌面截图：
+
+![DSH 被盖住时灯板仍在最上层](docs/lamp-on-top.png)
+
+上面这些都来自真实的 `xy-dsh-lamp/overlay.html`，没有一张是手画的。`docs/make-intro.py` 把灯板按状态序列逐步驱动、以 10fps 连续录成 GIF（含「等你」态的闪烁、收起态与中英切换），`docs/make-assets.py` 负责那几张静态 PNG 插图。两个脚本都用真实浏览器引擎在受控背景前渲染，所以不会带上桌面上的任何东西。想重新出图就跑对应脚本。
 
 ## 安装
 
