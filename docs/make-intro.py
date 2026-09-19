@@ -97,16 +97,6 @@ STORY = [
         S("ai_yingji", [("ROOT", "run"), ("A1", "err")], "err", active="A1",
           title="家庭健康档案易读性优化", elapsed=152000),
     ], "ERR", 152000), 2.7),
-    # 六个会话
-    state(snap([
-        S("blog", [("ROOT", "run"), ("A1", "run")], "run", active="A1", elapsed=12000),
-        S("project-learning", [("ROOT", "run")], "run", elapsed=45000),
-        S("ai_yingji", [("ROOT", "wait")], "wait", elapsed=61000),
-        S("cybook", [("ROOT", "run"), ("A1", "done")], "run", elapsed=8800),
-        S("hermes-pixel", [("ROOT", "done")], "done", elapsed=30000),
-        S("tcagent", [("ROOT", "run"), ("A1", "run"), ("A2", "run")], "run",
-          active="A2", elapsed=97000),
-    ], "RUN", 97000), 2.6),
     # 收起成一个灯
     click("#fold", 2.4),
     # 展开：真实 HUD 里这一步由宿主判定「这是点击不是拖动」后回调页面，
@@ -116,6 +106,18 @@ STORY = [
     click("#lang", 2.4),
     # 切回中文
     click("#lang", 1.4),
+    # 收起后六个任务就是六盏小灯 —— 展开的六会话有 289px 高，会把整条画布拉大，
+    # 所以「多任务」这一格用收起态来演示，只占 82x30。
+    click("#fold", 1.0),
+    state(snap([
+        S("blog", [("ROOT", "run"), ("A1", "run")], "run", active="A1", elapsed=12000),
+        S("project-learning", [("ROOT", "run")], "run", elapsed=45000),
+        S("ai_yingji", [("ROOT", "wait")], "wait", elapsed=61000),
+        S("cybook", [("ROOT", "run"), ("A1", "done")], "run", elapsed=8800),
+        S("hermes-pixel", [("ROOT", "done")], "done", elapsed=30000),
+        S("tcagent", [("ROOT", "run"), ("A1", "run"), ("A2", "run")], "run",
+          active="A2", elapsed=97000),
+    ], "RUN", 97000), 2.6),
 ]
 
 
@@ -179,7 +181,9 @@ def main(engine="webkit", scale=2):
         for kind, arg, hold in STORY:
             if kind == "state":
                 current["v"] = arg
-                page.wait_for_timeout(150)
+                # Must outlast the page's 400ms /api poll, or the frames that
+                # follow still show the previous state.
+                page.wait_for_timeout(520)
                 label = f"mark={arg['mark']} n={arg['count']}"
             elif kind == "click":
                 page.eval_on_selector(arg, "el => el.click()")

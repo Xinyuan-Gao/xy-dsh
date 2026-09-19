@@ -1,6 +1,30 @@
 # xy-dsh-context
 
-DeepSeek Harness 的会话级 Context Lens。读取 `sessionStats` 与 `tokenUsage` 两个 projection，把当前会话的用量显示出来。
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](../LICENSE)
+[![DSH](https://img.shields.io/badge/dsh-0.1.5--rc.1%20%7C%200.1.5--rc.2%20%7C%200.1.6--alpha.2-blue.svg)](../COMPATIBILITY.md)
+[![Status](https://img.shields.io/badge/status-prototype-orange.svg)](#状态)
+
+**会话级 Context Lens。** 读取 `sessionStats` 与 `tokenUsage` 两个 projection，把当前会话的用量显示出来。
+
+> **状态：原型。** 见文末[状态](#状态)一节——插槽名、projection 名和字段名都对着 DSH 2.0.9 的包核过，但**没有实际渲染验证过**。
+
+## 装
+
+需要 Node ≥ 22.19.0：
+
+```bash
+dsh plugin --profile web add "github:Xinyuan-Gao/xy-dsh#path:xy-dsh-context"
+```
+
+装完重启 DSH Desktop，或重启 `dsh web`。
+
+想改代码就 clone 下来用 `link:` 装一份可编辑的：
+
+```bash
+git clone https://github.com/Xinyuan-Gao/xy-dsh.git
+cd xy-dsh
+dsh plugin --profile web add link:"$PWD/xy-dsh-context"
+```
 
 ## 显示什么
 
@@ -23,24 +47,19 @@ DeepSeek Harness 的会话级 Context Lens。读取 `sessionStats` 与 `tokenUsa
 | `conversation.session.header.actions` | 标题栏的 `Context +/−` 按钮，点开是同一个面板 |
 | `sidebar.footer.action` | 侧栏底部的说明卡片 |
 
-## 安装
-
-属于 [xy-dsh](../) 集合。直接装：
-
-```bash
-dsh plugin --profile web add "github:Xinyuan-Gao/xy-dsh#path:xy-dsh-context"
-```
-
-要改代码就先 clone，再用 `link:` 装：
-
-```bash
-git clone https://github.com/Xinyuan-Gao/xy-dsh.git
-cd xy-dsh
-dsh plugin --profile web add link:"$PWD/xy-dsh-context"
-```
-
-然后重启 DSH Desktop，或重启 `dsh web`。
-
 ## 状态
 
-原型。projection 名（`sessionStats`、`tokenUsage`）和字段名、以及三个插槽名都对着 DSH 2.0.9 的包核过，但本机没在 desktop profile 里长期用它，实际观感没有验证过。
+原型，没在 desktop profile 里长期用过，所以**实际观感没有验证过**：
+
+| 项 | 状态 |
+|---|---|
+| projection 名（`sessionStats`、`tokenUsage`）与字段名 | ✅ 对着 DSH 2.0.9 的包核过 |
+| 三个插槽名 | ✅ 对着 `dsh-client-modules` 与 UI 包核过 |
+| 界面实际渲染 | ❌ 没见过 |
+| 兼容性声明与安装证据 | ✅ 见 [COMPATIBILITY.md](../COMPATIBILITY.md) |
+
+欢迎提 issue 告诉我它长什么样。
+
+# License
+
+MIT

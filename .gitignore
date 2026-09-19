@@ -2,3 +2,22 @@
 node_modules/
 *.log
 __pycache__/
+
+# 演示片素材。母片 xy-dsh-lamp-demo.mp4 是整屏录制，含桌面内容；成片也有几百 MB。
+# 两者都不该进 git：单文件超 100MB 会被 GitHub 拒收，而且母片会连带把桌面一起公开。
+# 要发布成片就走 GitHub Release 资产（或市场附件），不要提交进仓库。
+demo/**/*.mp4
+demo/**/*.wav
+demo/**/scratch/
+demo/**/__pycache__/
+demo/*.orig
+# 中间产物同理：音频分轨、字幕/预览 PNG 都是可再生的，没必要进仓库。
+demo/**/*.aiff
+demo/**/*.json.orig
+demo/preview/
+demo/preview_contact.png
+demo/work/
+demo/user/work/
+demo/user/audio/
+demo/demo-home/
+demo/lamp-hud-demo
