@@ -154,6 +154,58 @@ def new_page(browser, engine, scale, backdrop):
     return page
 
 
+# A pretend desktop behind the board, so the translucent option is visible.
+DESKTOP = ("repeating-linear-gradient(115deg,#2d4a63 0 42px,#33536e 42px 84px),"
+           "radial-gradient(600px 300px at 20% 10%, #4f7fa8, transparent 70%)")
+
+BACKGROUNDS = ["navy", "black", "slate", "glass", "light"]
+
+
+def shoot_backgrounds(browser, scale):
+    """One sheet with every background choice, over a stand-in desktop."""
+    tiles = []
+    for bg in BACKGROUNDS:
+        page = browser.new_page(viewport={"width": 420, "height": 150}, device_scale_factor=scale)
+        page.add_init_script(STUB + f'window.__lampInitialBg = "{bg}";')
+        page.goto(url)
+        page.wait_for_timeout(650)
+        page.add_style_tag(content=(
+            f"html,body{{background:{DESKTOP} !important}}"
+            "body{padding:20px !important}"
+            ".card,.mini{box-shadow:inset 0 1px 0 var(--sheen),0 14px 28px rgba(0,0,0,.45) !important}"))
+        page.wait_for_timeout(250)
+        tmp = Path(f"/tmp/xy-dsh-bg-{bg}.png")
+        page.screenshot(path=str(tmp))
+        page.close()
+        tiles.append(Image.open(tmp).convert("RGB"))
+
+    def crop(image, pad=26):
+        px = image.load()
+        xs, ys = [], []
+        for y in range(0, image.height, 2):
+            for x in range(0, image.width, 2):
+                r, g, b = px[x, y]
+                if r + g + b < 300:            # the board, not the desktop backdrop
+                    xs.append(x)
+                    ys.append(y)
+        if not xs:
+            return image
+        return image.crop((max(0, min(xs) - pad), max(0, min(ys) - pad),
+                           min(image.width, max(xs) + pad), min(image.height, max(ys) + pad)))
+
+    tiles = [crop(t) for t in tiles]
+    w = max(t.width for t in tiles)
+    h = max(t.height for t in tiles)
+    cols = 2
+    rows = (len(tiles) + cols - 1) // cols
+    sheet = Image.new("RGB", (cols * w + (cols + 1) * 10, rows * h + (rows + 1) * 10), (40, 58, 76))
+    for i, tile in enumerate(tiles):
+        r, c = divmod(i, cols)
+        sheet.paste(tile, (10 + c * (w + 10), 10 + r * (h + 10)))
+    sheet.save(OUT / "lamp-backgrounds.png")
+    print(f"  lamp-backgrounds.png: {sheet.width}x{sheet.height}")
+
+
 def main(engine, scale):
     global url
     server = HTTPServer(("127.0.0.1", 0), Handler)
@@ -188,6 +240,9 @@ def main(engine, scale):
             y += image.height + gap
         combo.save(OUT / "lamp-lang.png")
         print(f"  lamp-lang.png: {combo.width}x{combo.height}")
+
+        current["v"] = SESSIONS
+        shoot_backgrounds(browser, scale)
 
         page = new_page(browser, engine, scale, FLAT)
         frames, durations = [], []

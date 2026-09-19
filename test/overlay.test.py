@@ -1,6 +1,6 @@
 """Overlay rendering + interaction regression, with the DOM-diff invariant that
 the blink and the tooltips depend on."""
-import json, threading
+import json, sys, threading
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from playwright.sync_api import sync_playwright
@@ -50,6 +50,18 @@ window.webkit = { messageHandlers: {
   menu: { postMessage: (m) => window.__msg.push({ ch: 'menu', ...m }) } } };
 window.__tag = (el) => { if (!window.__ids.has(el)) window.__ids.set(el, window.__n++); return window.__ids.get(el); };
 """
+
+
+SIZE_KEYS = {"ch", "w", "h", "collapsed", "bg"}
+
+
+def size_of(msg, **want):
+    """Match the reported fields, and insist the key set is the expected one —
+    adding a field to the report should force a deliberate edit here."""
+    if msg is None or set(msg.keys()) != SIZE_KEYS:
+        return False, f"keys={sorted(msg.keys()) if msg else None}"
+    got = {k: msg[k] for k in want}
+    return got == want, str(msg)
 
 
 def collapsed_width(n):
@@ -150,9 +162,9 @@ with sync_playwright() as p:
     clear(pg)
     pg.locator("#fold").click(); pg.wait_for_timeout(250)
     mini = pg.evaluate("() => window.__msg.filter(m => m.ch === 'size').at(-1)")
+    ok_size, why = size_of(mini, w=collapsed_width(2), h=30, collapsed=True, bg="navy")
     check("fold collapses to one lamp per task (2 tasks)",
-          drags(pg) == [] and mini == {"ch": "size", "w": collapsed_width(2), "h": 30, "collapsed": True},
-          f"{drags(pg)} {mini}")
+          drags(pg) == [] and ok_size, f"{drags(pg)} {why}")
     pg.evaluate("() => window.__lampClick()"); pg.wait_for_timeout(300)
     check("host callback expands again", pg.locator("#card").is_visible())
     pg.close()
@@ -178,8 +190,8 @@ with sync_playwright() as p:
     check("size report says expanded", first.get("collapsed") is False, str(first))
     pg.evaluate("() => window.__lampSetCollapsed(true)"); pg.wait_for_timeout(250)
     last = pg.evaluate("() => window.__msg.filter(m => m.ch === 'size').at(-1)")
-    check("host can restore the collapsed face",
-          last == {"ch": "size", "w": collapsed_width(2), "h": 30, "collapsed": True}, str(last))
+    ok_size, why = size_of(last, w=collapsed_width(2), h=30, collapsed=True, bg="navy")
+    check("host can restore the collapsed face", ok_size, why)
     pg.evaluate("() => window.__lampSetCollapsed(false)"); pg.wait_for_timeout(250)
     check("and expand it again", pg.locator("#card").is_visible())
 
@@ -209,3 +221,4 @@ with sync_playwright() as p:
     b.close()
 
 print("RESULT:", "ALL PASS" if ok else "FAILURES")
+sys.exit(0 if ok else 1)

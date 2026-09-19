@@ -18,6 +18,61 @@
       --ink: #e8ecf4;
       --idle: #3a425c;
     }
+    /* Background choices. The first block is the default (深蓝); the rest only
+       override what they change. Lamp colours move with the background because
+       amber on a light card is not readable. */
+    body[data-bg="black"] {
+      --bg: #000000;
+      --line: #262629;
+      --edge: rgba(255, 255, 255, .13);
+      --sheen: rgba(255, 255, 255, .06);
+      --mute: #6d6d73;
+      --ink: #ededf0;
+      --idle: #3c3c40;
+      --up: #00c476;
+      --down: #ff3b4a;
+    }
+    body[data-bg="slate"] {
+      --bg: #1c1c1e;
+      --line: #34343a;
+      --edge: rgba(255, 255, 255, .11);
+      --sheen: rgba(255, 255, 255, .05);
+      --mute: #8b8b93;
+      --ink: #f0f0f2;
+      --idle: #4a4a50;
+      --amber: #ffb04a;
+      --wait: #5cb3ff;
+      --up: #2ecc8f;
+      --down: #ff5a66;
+    }
+    /* Translucent: the window is already transparent, so the desktop reads
+       through the card. Not real vibrancy (that needs an NSVisualEffectView). */
+    body[data-bg="glass"] {
+      --bg: rgba(12, 16, 26, .78);
+      --line: rgba(122, 142, 190, .30);
+      --edge: rgba(255, 255, 255, .17);
+      --sheen: rgba(255, 255, 255, .10);
+      --mute: #97a4c0;
+      --ink: #eef2fa;
+      --idle: rgba(126, 140, 172, .60);
+      --amber: #ffab45;
+      --wait: #56b4ff;
+      --up: #16cf85;
+      --down: #ff4a58;
+    }
+    body[data-bg="light"] {
+      --bg: #f5f7fb;
+      --line: #d6dde9;
+      --edge: rgba(20, 30, 50, .13);
+      --sheen: rgba(255, 255, 255, .85);
+      --mute: #6f7b93;
+      --ink: #1b2436;
+      --idle: #aab3c5;
+      --amber: #c97700;
+      --wait: #0b74c4;
+      --up: #00875a;
+      --down: #cf1f2e;
+    }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body {
       background: transparent;
@@ -134,7 +189,7 @@
     .quit[data-armed="1"] {
       border-color: var(--down);
       background: var(--down);
-      color: var(--ink);
+      color: #fff;
     }
 
     /* One row per session; the left column names the project. */
@@ -267,7 +322,22 @@
 
     // The host injects this before the page runs, so the first painted frame is
     // already the right face (no expand-then-snap on restart).
+    /* Background ids and their bilingual labels. The host's right-click menu is
+       built from this list, so a theme is added in exactly one place. */
+    const BACKGROUNDS = [
+      ['navy', '深蓝', 'Navy'],
+      ['black', '纯黑', 'Black'],
+      ['slate', '石墨', 'Slate'],
+      ['glass', '半透明', 'Glass'],
+      ['light', '浅色', 'Light'],
+    ]
+    const BG_IDS = BACKGROUNDS.map((b) => b[0])
+    window.__lampBackgrounds = BACKGROUNDS
+
     let collapsed = Boolean(window.__lampInitialCollapsed)
+    // Injected before the page runs, so the first painted frame is already the
+    // chosen background instead of flashing the default.
+    let background = BG_IDS.includes(window.__lampInitialBg) ? window.__lampInitialBg : 'navy'
     let lang = 'zh'
     // Once the button is used, the local choice wins: a poll that started
     // before the POST landed must not flip the labels back.
@@ -275,6 +345,7 @@
     let lastData = { mark: 'IDLE', note: 'ROOT', elapsedMs: 0, agents: [] }
 
     const L = () => LANGS[lang] || LANGS.zh
+
 
     /** ROOT / A3 are the host's identifiers; show them the reader's way. */
     function codeLabel(code) {
@@ -435,15 +506,20 @@
     let sentW = 0
     let sentH = 0
     let sentCollapsed = null
+    let sentBackground = null
     function syncSize() {
       const box = (collapsed ? el.mini : el.card).getBoundingClientRect()
       const w = Math.ceil(box.width)
       const h = Math.ceil(box.height)
-      if (w === sentW && h === sentH && collapsed === sentCollapsed) return
+      if (w === sentW && h === sentH && collapsed === sentCollapsed
+        && background === sentBackground) return
       sentW = w
       sentH = h
       sentCollapsed = collapsed
-      try { window.webkit.messageHandlers.size.postMessage({ w, h, collapsed }) } catch {}
+      sentBackground = background
+      try {
+        window.webkit.messageHandlers.size.postMessage({ w, h, collapsed, bg: background })
+      } catch {}
     }
 
     function toggle(next) {
@@ -460,6 +536,19 @@
     window.__lampSetCollapsed = (v) => {
       if (collapsed !== Boolean(v)) toggle(Boolean(v))
     }
+
+    function applyBackground(next) {
+      if (!BG_IDS.includes(next) || next === background) return
+      background = next
+      document.body.dataset.bg = background
+      // The host persists it from the size report, so just re-announce.
+      sentW = 0
+      sentH = 0
+      syncSize()
+    }
+
+    window.__lampSetBg = applyBackground
+    document.body.dataset.bg = background
 
     el.fold.addEventListener('click', (e) => { e.stopPropagation(); toggle(true) })
 

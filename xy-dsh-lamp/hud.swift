@@ -9,6 +9,9 @@ struct LampPrefs: Codable {
   var y: Double
   var h: Double
   var collapsed: Bool
+  /// Background id chosen from the context menu. Purely presentational, so it
+  /// lives here rather than in the host's prefs.
+  var bg: String?
 }
 
 /// WKWebView with a custom right-click menu: the window is exactly the size of
@@ -45,6 +48,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
     fileURLWithPath: ProcessInfo.processInfo.environment["HOME"] ?? NSHomeDirectory()
   ).appendingPathComponent(".dsh/xy-dsh-lamp-window.json")
   private var collapsed = false
+  private var background = "navy"
+  /// id → bilingual label, matching the page's own list.
+  private let backgrounds: [(id: String, label: String)] = [
+    ("navy", "深蓝 Navy"),
+    ("black", "纯黑 Black"),
+    ("slate", "石墨 Slate"),
+    ("glass", "半透明 Glass"),
+    ("light", "浅色 Light"),
+  ]
   private var saveSoon: DispatchWorkItem?
   private var startRect: NSRect?
 
@@ -66,6 +78,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
     )
     let prefs = loadPrefs()
     collapsed = prefs?.collapsed ?? false
+    if let saved = prefs?.bg, backgrounds.contains(where: { $0.id == saved }) {
+      background = saved
+    }
     var rect = fallback
     if let saved = prefs {
       let height = min(max(CGFloat(saved.h), minSize.height), maxSize.height)
@@ -118,7 +133,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
     // correcting it after load. Correcting afterwards would flash the expanded
     // board first, and the page's own first size report would race the fix.
     config.userContentController.addUserScript(WKUserScript(
-      source: "window.__lampInitialCollapsed = \(collapsed ? "true" : "false");",
+      source: "window.__lampInitialCollapsed = \(collapsed ? "true" : "false");"
+        + "window.__lampInitialBg = \"\(background)\";",
       injectionTime: .atDocumentStart,
       forMainFrameOnly: true
     ))
@@ -160,6 +176,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
     let reset = NSMenuItem(title: "回到左上角", action: #selector(resetPosition), keyEquivalent: "")
     reset.target = self
     menu.addItem(reset)
+
+    let bgItem = NSMenuItem(title: "背景", action: nil, keyEquivalent: "")
+    let bgMenu = NSMenu()
+    for option in backgrounds {
+      let item = NSMenuItem(title: option.label, action: #selector(chooseBackground(_:)), keyEquivalent: "")
+      item.target = self
+      item.representedObject = option.id
+      item.state = option.id == background ? .on : .off
+      bgMenu.addItem(item)
+    }
+    bgItem.submenu = bgMenu
+    menu.addItem(bgItem)
     menu.addItem(.separator())
     let quit = NSMenuItem(title: "退出灯板", action: #selector(quitBoard), keyEquivalent: "")
     quit.target = self
@@ -171,6 +199,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
     guard let start = startRect else { return }
     let screen = NSScreen.main?.visibleFrame ?? start
     window.setFrameOrigin(NSPoint(x: screen.minX + 12, y: screen.maxY - window.frame.height - 12))
+    scheduleSave()
+  }
+
+  @objc private func chooseBackground(_ sender: NSMenuItem) {
+    guard let id = sender.representedObject as? String else { return }
+    background = id
+    web.evaluateJavaScript("window.__lampSetBg && window.__lampSetBg(\"\(id)\")")
     scheduleSave()
   }
 
@@ -201,7 +236,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
       x: Double(window.frame.minX),
       y: Double(window.frame.minY),
       h: Double(window.frame.height),
-      collapsed: collapsed
+      collapsed: collapsed,
+      bg: background
     )
     do {
       try FileManager.default.createDirectory(
@@ -242,6 +278,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
     // The page owns which face is showing, so it owns the remembered value too.
     if let flag = (body["collapsed"] as? NSNumber)?.boolValue, flag != collapsed {
       collapsed = flag
+      scheduleSave()
+    }
+    if let bg = body["bg"] as? String, bg != background, backgrounds.contains(where: { $0.id == bg }) {
+      background = bg
       scheduleSave()
     }
     guard let w = (body["w"] as? NSNumber)?.doubleValue,

@@ -1,4 +1,4 @@
-import json, threading
+import json, sys, threading
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from playwright.sync_api import sync_playwright
@@ -90,3 +90,4 @@ with sync_playwright() as p:
           [m["ch"] for m in pg.evaluate("() => window.__msg")].count("quit")==0)
     pg.close(); b.close()
 print("RESULT:", "ALL PASS" if ok else "FAILURES")
+sys.exit(0 if ok else 1)
