@@ -60,15 +60,24 @@ function notify(payload, sound) {
   }
 }
 
-function killPid(pid) {
+function killPid(pid, log) {
   if (!pid) return
-  try { process.kill(pid, 'TERM') } catch {}
+  try {
+    // 'SIGTERM', not 'TERM': Node throws ERR_UNKNOWN_SIGNAL on the short form.
+    process.kill(pid, 'SIGTERM')
+  } catch (err) {
+    // ESRCH just means it already went away. Anything else is real, and this
+    // used to be an empty catch — which is how a one-word signal typo kept
+    // killOldHud() dead for the whole life of the plugin.
+    if (err?.code !== 'ESRCH') {
+      log?.warn?.(`[xy-dsh-lamp] could not stop HUD pid ${pid}: ${err?.code || err}`)
+    }
+  }
 }
 
-function killOldHud() {
+function killOldHud(log) {
   try {
-    const pid = Number(readFileSync(hudPid, 'utf8'))
-    killPid(pid)
+    killPid(Number(readFileSync(hudPid, 'utf8')), log)
   } catch {}
 }
 
@@ -114,7 +123,7 @@ function compileHud(log) {
 
 function launchDesktopHud(snapshot, log, setLang) {
   if (process.platform !== 'darwin') return () => {}
-  killOldHud()
+  killOldHud(log)
 
   const server = http.createServer((req, res) => {
     const path = (req.url || '/').split('?')[0]
@@ -172,7 +181,7 @@ function launchDesktopHud(snapshot, log, setLang) {
     try { server.close() } catch {}
     // The pid file is the authority: `child` goes stale as soon as the HUD is
     // restarted outside the plugin (a hand-run binary, a crash + relaunch).
-    killOldHud()
+    killOldHud(log)
   }
 }
 
