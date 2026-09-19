@@ -43,6 +43,17 @@ dsh plugin --profile desktop add link:"$PWD/xy-dsh-lamp"
 
 `xy-dsh-lamp` 的灯板是一个独立编译出来的 macOS HUD：第一次加载时宿主会用 `swiftc` 把 `hud.swift` 编到 `~/.dsh/xy-dsh-lamp-hud.app`，所以机器上要有 Xcode Command Line Tools。没有 `swiftc` 时灯板不会出现，插件的系统通知部分照常工作；非 macOS 平台也不会拉 HUD。
 
+## 测试
+
+```bash
+./test/run.sh
+```
+
+四套：宿主逻辑（Node，任何平台）、HUD 进程生命周期（macOS）、页面渲染与交互、收起态（后两套要 playwright）。
+每套都在自己的临时 HOME 里跑，不会碰你真实的 `~/.dsh`。细节和「为什么留这些断言」见 [test/README.md](./test/README.md)。
+
+这里每一条断言都对应一个真出过的问题，而且都是读代码看不出来的：等你灯不闪、`killOldHud` 静默失效、编译失败拖垮灯板、收起态宽度不跟着灯数走。写新测试时请让夹具来自**真实的事件载荷**——这个仓库有两次测试是绿的而功能是坏的，都是因为夹具写的是自己的假设。
+
 ## License
 
 MIT
