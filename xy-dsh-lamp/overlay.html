@@ -261,11 +261,6 @@
       }]
     }
 
-    function esc(text) {
-      return String(text ?? '').replace(/[&<>"]/g, (c) => (
-        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
-    }
-
     function fmt(ms) {
       const s = Math.floor((Number(ms) || 0) / 1000)
       const m = Math.floor(s / 60)
@@ -315,20 +310,7 @@
       // The project column only earns its width when there is a name to show.
       el.card.dataset.who = sessions.some((s) => s.name) ? '1' : '0'
       el.rows.hidden = isDone
-      if (!isDone) {
-        el.rows.innerHTML = sessions.map((s) => {
-          const list = s.agents && s.agents.length ? s.agents : [{ code: 'ROOT', state: 'idle' }]
-          const tip = [s.name, s.title].filter(Boolean).join(' · ')
-          return `<div class="row">
-            <span class="who" title="${esc(tip)}"><span>${esc(s.name)}</span></span>
-            ${list.map((a) => `
-              <div class="cell">
-                <div class="k">${esc(codeLabel(a.code))}</div>
-                <div class="v"><span class="lamp" data-state="${esc(a.state)}"></span>${esc(L().cell[a.state] || L().cell.idle)}</div>
-              </div>`).join('')}
-          </div>`
-        }).join('')
-      }
+      renderRows(sessions, isDone)
 
       el.lang.textContent = lang === 'zh' ? '中' : 'EN'
       el.lang.title = L().swap
@@ -341,6 +323,51 @@
       el.card.hidden = collapsed
       el.mini.hidden = !collapsed
       syncSize()
+    }
+
+    /* Rows are rebuilt only when their SHAPE changes. The poll runs every 400ms
+       and used to replace innerHTML every time, which restarted the wait-lamp
+       blink from 0% (so it never blinked) and swapped the label element out from
+       under the cursor (so its tooltip never appeared). */
+    let rowShape = null
+
+    function renderRows(sessions, isDone) {
+      const model = sessions.map((s) => ({
+        name: s.name || '',
+        tip: [s.name, s.title].filter(Boolean).join(' · '),
+        cells: (s.agents && s.agents.length ? s.agents : [{ code: 'ROOT', state: 'idle' }])
+          .map((a) => ({ code: a.code, state: a.state })),
+      }))
+      const shape = isDone ? '' : model.map((r) => r.cells.length).join('-')
+
+      if (shape !== rowShape) {
+        rowShape = shape
+        el.rows.innerHTML = isDone ? '' : model.map((r) => `<div class="row">
+            <span class="who"><span></span></span>
+            ${r.cells.map(() => `<div class="cell">
+                <div class="k"></div>
+                <div class="v"><span class="lamp" data-state="idle"></span><span class="st"></span></div>
+              </div>`).join('')}
+          </div>`).join('')
+      }
+      if (isDone) return
+
+      const rows = el.rows.children
+      model.forEach((r, i) => {
+        const row = rows[i]
+        if (!row) return
+        const who = row.querySelector('.who')
+        who.title = r.tip
+        who.firstElementChild.textContent = r.name
+        const cells = row.querySelectorAll('.cell')
+        r.cells.forEach((c, j) => {
+          const cell = cells[j]
+          if (!cell) return
+          cell.querySelector('.k').textContent = codeLabel(c.code)
+          cell.querySelector('.lamp').dataset.state = c.state
+          cell.querySelector('.st').textContent = L().cell[c.state] || L().cell.idle
+        })
+      })
     }
 
     /* Report the natural content size so the host can fit the window to it. */

@@ -78,11 +78,19 @@ AppKit 自带的拖拽（`performDrag`、`isMovableByWindowBackground`）对「�
 |---|---|
 | 灰 | 待命 |
 | 琥珀 | 工作中 |
-| 琥珀闪 | 等你（提问 / 审批） |
+| 琥珀闪 | 等你（有审批待处理） |
 | 红 | 出错 |
 | 绿 | 完成 |
 
 一盏灯出错时，标题栏的 `工作中 / 等你` 会变成红色的 `出错`，但其余灯照常显示各自的进度。
+
+## 等你
+
+琥珀闪表示**有审批卡在你这里**。这个状态听的是 `approval/asked` 和 `approval/decided` 两个 session 事件。
+
+不能用 `turn/end` 判断：审批期间 turn 是**开着的**（`approval.request()` 要求 turn 未结束），agent 状态一路都是 `running`，`turn/end` 根本不会来。只有 turn 已经结束、reason 是 `blocked` 时才走那条老路（实测在你自己的会话里从没出现过）。
+
+已知缺口：`ask_user_question` 那条路没接。它走的是 `user-questions/request` waterfall 钩子，不是 session 事件，所以提问时灯不会闪。
 
 ## 安装
 

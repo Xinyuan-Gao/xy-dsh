@@ -223,6 +223,7 @@ export function apply(ctx, config = {}) {
       name: projectName(session),
       code: 'ROOT',
       state: 'idle',
+      waiting: false,
       reason: null,
       title: '',
       startedAt: 0,
@@ -244,7 +245,17 @@ export function apply(ctx, config = {}) {
     }
     if (type === 'turn/end') {
       const kind = event?.data?.reason?.kind
-      upsert(session, { reason: kind || null })
+      // The turn is over, so nothing can still be pending on it.
+      upsert(session, { reason: kind || null, waiting: false })
+    }
+    // A pending approval keeps the turn OPEN, so the agent still reports
+    // "running" — turn/end never carries it. These two audit events are the
+    // only signal that the run is actually blocked on the user.
+    if (type === 'approval/asked') {
+      upsert(session, { waiting: true })
+    }
+    if (type === 'approval/decided') {
+      upsert(session, { waiting: false })
     }
     if (type === 'session/title' && event?.data?.title) {
       upsert(session, { title: String(event.data.title) })
@@ -277,11 +288,15 @@ export function apply(ctx, config = {}) {
 
   const snapshot = () => {
     const now = Date.now()
-    const live = [...agents.values()].filter((a) => {
-      if (a.state === 'run' || a.state === 'wait' || a.state === 'err') return true
-      if (a.endedAt && now - a.endedAt < 90_000) return true
-      return false
-    })
+    // Resolve the display state once, up front: a pending approval outranks the
+    // "running" the agent still reports. Everything below reads `state`.
+    const live = [...agents.values()]
+      .map((a) => (a.waiting && a.state === 'run' ? { ...a, state: 'wait' } : a))
+      .filter((a) => {
+        if (a.state === 'run' || a.state === 'wait' || a.state === 'err') return true
+        if (a.endedAt && now - a.endedAt < 90_000) return true
+        return false
+      })
 
     // One row per root session. Picking a single "focus" root used to hide every
     // other project that had a main agent running.
