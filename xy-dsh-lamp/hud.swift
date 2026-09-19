@@ -21,7 +21,7 @@ final class LampWebView: WKWebView {
   }
 }
 
-final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKScriptMessageHandler {
+final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler {
   var window: NSWindow!
   var web: LampWebView!
   var url: URL!
@@ -113,11 +113,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     config.userContentController.add(self, name: "size")
     config.userContentController.add(self, name: "drag")
     config.userContentController.add(self, name: "menu")
+    // Tell the page which face to start in BEFORE it runs, rather than
+    // correcting it after load. Correcting afterwards would flash the expanded
+    // board first, and the page's own first size report would race the fix.
+    config.userContentController.addUserScript(WKUserScript(
+      source: "window.__lampInitialCollapsed = \(collapsed ? "true" : "false");",
+      injectionTime: .atDocumentStart,
+      forMainFrameOnly: true
+    ))
     config.suppressesIncrementalRendering = true
 
     web = LampWebView(frame: root.bounds, configuration: config)
     web.autoresizingMask = [.width, .height]
-    web.navigationDelegate = self
     web.setValue(false, forKey: "drawsBackground")
     web.menuProvider = { [weak self] in self?.buildMenu() }
     web.load(URLRequest(url: page, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 5))
@@ -144,13 +151,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     controller?.removeScriptMessageHandler(forName: "size")
     controller?.removeScriptMessageHandler(forName: "drag")
     controller?.removeScriptMessageHandler(forName: "menu")
-  }
-
-  /// The page finished loading: restore the collapsed face if that is how the
-  /// board was left, otherwise the window would pop open on every restart.
-  func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-    guard collapsed else { return }
-    webView.evaluateJavaScript("window.__lampSetCollapsed && window.__lampSetCollapsed(true)")
   }
 
   private func buildMenu() -> NSMenu {
@@ -236,6 +236,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
 
   /// The page posts `{ w, h }` whenever its natural content size changes.
   private func applySize(_ body: [String: Any]) {
+    // The page owns which face is showing, so it owns the remembered value too.
+    if let flag = (body["collapsed"] as? NSNumber)?.boolValue, flag != collapsed {
+      collapsed = flag
+      scheduleSave()
+    }
     guard let w = (body["w"] as? NSNumber)?.doubleValue,
       let h = (body["h"] as? NSNumber)?.doubleValue
     else { return }

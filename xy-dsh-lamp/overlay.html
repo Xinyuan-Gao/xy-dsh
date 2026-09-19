@@ -229,7 +229,9 @@
       minilamp: document.getElementById('minilamp'),
     }
 
-    let collapsed = false
+    // The host injects this before the page runs, so the first painted frame is
+    // already the right face (no expand-then-snap on restart).
+    let collapsed = Boolean(window.__lampInitialCollapsed)
     let lang = 'zh'
     // Once the button is used, the local choice wins: a poll that started
     // before the POST landed must not flip the labels back.
