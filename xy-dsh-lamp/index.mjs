@@ -305,8 +305,12 @@ export function apply(ctx, config = {}) {
       refreshWaiting(session)
     }
     if (type === 'tool/result') {
+      // The call id is nested here, unlike `tool/call` where it is top level.
+      // Guessing top level made this pairing never match, so an answered
+      // question kept the board on ASK for the rest of the turn.
+      const callId = event?.data?.message?.source?.callId ?? event?.data?.callId
       const set = asks.get(id)
-      if (set?.delete(String(event.data?.callId))) refreshWaiting(session)
+      if (callId !== undefined && set?.delete(String(callId))) refreshWaiting(session)
     }
     if (type === 'session/title' && event?.data?.title) {
       upsert(session, { title: String(event.data.title) })
