@@ -43,6 +43,12 @@ dsh plugin --profile desktop add link:"$PWD/xy-dsh-lamp"
 
 `xy-dsh-lamp` 的灯板是一个独立编译出来的 macOS HUD：第一次加载时宿主会用 `swiftc` 把 `hud.swift` 编到 `~/.dsh/xy-dsh-lamp-hud.app`，所以机器上要有 Xcode Command Line Tools。没有 `swiftc` 时灯板不会出现，插件的系统通知部分照常工作；非 macOS 平台也不会拉 HUD。
 
+## 兼容性
+
+两个插件都在各自的 `package.json` 里逐版本声明与 `@deepseek-ai/dsh` 的兼容性（`dsh.compatibility.dshReleases`），并配了可复现的证据脚本：每个官方 release 在一次性 `DSH_HOME` 里跑 install → compose → uninstall。
+
+当前声明与验证结果见 **[COMPATIBILITY.md](./COMPATIBILITY.md)**。
+
 ## 测试
 
 ```bash

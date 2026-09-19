@@ -13,6 +13,7 @@
 | `overlay.test.py` | 页面：多会话渲染、**DOM diff 不变量**、等你灯真的在闪、拖拽消息序列、右键交宿主、旧宿主格式兜底 | Python + playwright + Pillow |
 | `collapsed.test.py` | 收起态：一个任务一盏灯、宽度跟着灯数、等你灯在收起态也闪、关闭按钮两次点击 | 同上 |
 | `backgrounds.test.py` | 背景：五种各自生效、注入即首帧、运行中切换会回报、非法值被忽略、菜单清单由页面提供 | 同上 |
+| `compat-releases.sh` | 对每个官方 DSH release 在一次性 `DSH_HOME` 里跑 install → compose → uninstall | Node + npm + 网络 |
 
 浏览器那两套的依赖：
 
@@ -30,6 +31,18 @@ python -m playwright install webkit
 - 编译回退 —— 改坏一行 Swift 曾经等于灯板彻底消失，而 `execFileSync` 失败还可能截断一个本来能用的二进制。
 - 收起态宽度 —— `.mini` 是固定 `width: 30px`（原本单灯设计），三盏灯直接溢出被裁。灯数对**不等于**窗口大小对，所以几何单独断言。
 - 关闭按钮两次点击 —— 退出后要重启 DSH 才回来，误触的代价太大。
+
+## 兼容性验证
+
+`compat-releases.sh` 不是单元测试，它是 `dsh.compatibility.dshReleases` 里那些声明背后的证据：每个版本装那个精确的 CLI，装插件，确认 bundle 组合进生效配置（恰好 1 行），再卸载（回到 0 行）。全程用一个一次性 `DSH_HOME`，真实 `~/.dsh` 不读不写。
+
+```bash
+./test/compat-releases.sh xy-dsh-lamp 0.1.5-rc.2
+DSH_COMPAT_EXTRA_DEP="@deepseek-ai/dsh-app-boot@0.1.6-alpha.1" \
+  ./test/compat-releases.sh xy-dsh-lamp 0.1.6-alpha.1   # 钉住上游坏掉的依赖范围
+```
+
+结果与理由记在 [COMPATIBILITY.md](../COMPATIBILITY.md)。
 
 ## 运行器自己的坑
 
