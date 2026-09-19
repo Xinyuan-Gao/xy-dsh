@@ -1,6 +1,6 @@
 import { spawn, execFileSync } from 'node:child_process'
 import http from 'node:http'
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -92,10 +92,23 @@ function compileHud(log) {
     || statSync(hudSource).mtimeMs > statSync(hudBin).mtimeMs
   if (!stale) return hudBin
   log?.info?.('[xy-dsh-lamp] compiling desktop HUD')
-  execFileSync('swiftc', [hudSource, '-O', '-o', hudBin, '-framework', 'Cocoa', '-framework', 'WebKit'], {
-    timeout: 90_000,
-    stdio: ['ignore', 'pipe', 'pipe'],
-  })
+  // Compile beside the real binary and only swap it in on success: a failed
+  // build must never truncate a working binary, and must not cost us the board.
+  const staged = `${hudBin}.staged`
+  try {
+    execFileSync('swiftc', [hudSource, '-O', '-o', staged, '-framework', 'Cocoa', '-framework', 'WebKit'], {
+      timeout: 90_000,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    renameSync(staged, hudBin)
+  } catch (err) {
+    try { if (existsSync(staged)) unlinkSync(staged) } catch {}
+    if (existsSync(hudBin)) {
+      log?.error?.('[xy-dsh-lamp] HUD compile failed; keeping the existing binary', err)
+      return hudBin
+    }
+    throw err
+  }
   return hudBin
 }
 
@@ -212,6 +225,8 @@ export function apply(ctx, config = {}) {
 
   const agents = new Map()
   const childIndex = new Map()
+  /** callIds of ask_user_question calls still waiting on the user, per session. */
+  const asks = new Map()
 
   const upsert = (session, patch) => {
     if (!session?.id) return
@@ -224,21 +239,31 @@ export function apply(ctx, config = {}) {
       code: 'ROOT',
       state: 'idle',
       waiting: false,
+      approval: false,
       reason: null,
       title: '',
       startedAt: 0,
       endedAt: 0,
+      seenAt: Date.now(),
     }
     if (!childIndex.has(id) && prev.origin === 'subagent') {
       const n = [...agents.values()].filter((a) => a.parent === prev.parent).length + 1
       childIndex.set(id, n)
     }
     const code = prev.origin === 'subagent' ? `A${childIndex.get(id) || 1}` : 'ROOT'
-    agents.set(id, { ...prev, ...patch, code, id })
+    agents.set(id, { ...prev, ...patch, code, id, seenAt: Date.now() })
+  }
+
+  /** "Waiting on the user" is either a pending approval or a pending question. */
+  const refreshWaiting = (session) => {
+    const id = String(session.id)
+    const pending = Boolean(agents.get(id)?.approval) || (asks.get(id)?.size ?? 0) > 0
+    upsert(session, { waiting: pending })
   }
 
   ctx.on('session/event', (session, event) => {
     if (!session) return
+    const id = String(session.id)
     const type = event?.type
     if (type === 'turn/start') {
       upsert(session, {})
@@ -246,16 +271,33 @@ export function apply(ctx, config = {}) {
     if (type === 'turn/end') {
       const kind = event?.data?.reason?.kind
       // The turn is over, so nothing can still be pending on it.
-      upsert(session, { reason: kind || null, waiting: false })
+      asks.delete(id)
+      upsert(session, { reason: kind || null, approval: false })
+      refreshWaiting(session)
     }
     // A pending approval keeps the turn OPEN, so the agent still reports
     // "running" — turn/end never carries it. These two audit events are the
     // only signal that the run is actually blocked on the user.
     if (type === 'approval/asked') {
-      upsert(session, { waiting: true })
+      upsert(session, { approval: true })
+      refreshWaiting(session)
     }
     if (type === 'approval/decided') {
-      upsert(session, { waiting: false })
+      upsert(session, { approval: false })
+      refreshWaiting(session)
+    }
+    // ask_user_question blocks on the user too, but it hangs off the
+    // user-questions waterfall hook rather than an audit event — the pending
+    // tool call is what the session log actually shows.
+    if (type === 'tool/call' && event?.data?.name === 'ask_user_question') {
+      const set = asks.get(id) || new Set()
+      set.add(String(event.data.callId))
+      asks.set(id, set)
+      refreshWaiting(session)
+    }
+    if (type === 'tool/result') {
+      const set = asks.get(id)
+      if (set?.delete(String(event.data?.callId))) refreshWaiting(session)
     }
     if (type === 'session/title' && event?.data?.title) {
       upsert(session, { title: String(event.data.title) })
@@ -286,17 +328,56 @@ export function apply(ctx, config = {}) {
     notify({ title: 'DSH', body }, sound)
   })
 
+  /** How long a finished session stays on the board. */
+  const RETAIN_MS = 90_000
+  /** How long a finished session is still worth remembering at all. Never
+      shorter than the retention above, or the board would forget a row it is
+      still supposed to be drawing. */
+  const forgetMs = Math.max(
+    RETAIN_MS * 2,
+    Number(config.forgetMs) > 0 ? Number(config.forgetMs) : 10 * 60_000,
+  )
+
+  /** Drop sessions nobody will look at again. Without this the maps grow for
+      the whole life of the DSH process and every snapshot walks all of them. */
+  const prune = (now) => {
+    const live = new Set()
+    for (const a of agents.values()) {
+      if (a.state === 'run' || a.state === 'wait' || a.state === 'err') live.add(a.id)
+    }
+    // Never forget a parent whose subagent is still live, or the child would
+    // have no row left to appear in.
+    const pinned = new Set()
+    for (const a of agents.values()) {
+      if (a.parent && live.has(a.id)) pinned.add(a.parent)
+    }
+    for (const [id, a] of agents) {
+      if (live.has(id) || pinned.has(id)) continue
+      if (now - (a.seenAt || 0) < forgetMs) continue
+      agents.delete(id)
+      childIndex.delete(id)
+      asks.delete(id)
+    }
+  }
+
   const snapshot = () => {
     const now = Date.now()
+    prune(now)
     // Resolve the display state once, up front: a pending approval outranks the
     // "running" the agent still reports. Everything below reads `state`.
-    const live = [...agents.values()]
+    const settled = [...agents.values()]
       .map((a) => (a.waiting && a.state === 'run' ? { ...a, state: 'wait' } : a))
-      .filter((a) => {
-        if (a.state === 'run' || a.state === 'wait' || a.state === 'err') return true
-        if (a.endedAt && now - a.endedAt < 90_000) return true
-        return false
-      })
+    const isActive = (a) => a.state === 'run' || a.state === 'wait' || a.state === 'err'
+    const activeParents = new Set(
+      settled.filter(isActive).map((a) => a.parent).filter(Boolean))
+    const live = settled.filter((a) => {
+      if (isActive(a)) return true
+      // A row must exist for any session whose subagent is still running,
+      // however long the parent itself has been idle.
+      if (activeParents.has(a.id)) return true
+      if (a.endedAt && now - a.endedAt < RETAIN_MS) return true
+      return false
+    })
 
     // One row per root session. Picking a single "focus" root used to hide every
     // other project that had a main agent running.
@@ -345,7 +426,6 @@ export function apply(ctx, config = {}) {
       ? now - Math.min(...busyMembers.map((a) => a.startedAt || now))
       : Math.max(0, ...sessions.map((s) => s.elapsedMs), 0)
 
-    const nn = String(everyMember.length).padStart(2, '0')
     return {
       mode: allDone ? 'done' : everyMember.length ? 'work' : 'idle',
       mark: erred ? 'ERR' : waiting ? 'ASK' : allDone ? 'DONE' : running ? 'RUN' : 'IDLE',
@@ -353,10 +433,10 @@ export function apply(ctx, config = {}) {
       elapsedMs,
       count: roots.length,
       sessions,
+      // Kept for a page older than the sessions shape; a current page reads
+      // sessions and ignores this.
       agents: everyMember.map((a) => ({ id: a.id, code: a.code, state: a.state })),
-      doneText: `DONE  ${nn}/${nn}`,
       lang,
-      title: sessions[0]?.title || '',
     }
   }
 

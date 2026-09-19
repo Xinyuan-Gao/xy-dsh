@@ -1,9 +1,29 @@
 import Cocoa
 import WebKit
 
+/// Where the board was last left, so it comes back there after a DSH restart.
+/// Height is part of it: the window is anchored by its TOP edge, so restoring
+/// the origin alone would walk the board upward on every restart.
+struct LampPrefs: Codable {
+  var x: Double
+  var y: Double
+  var h: Double
+  var collapsed: Bool
+}
+
+/// WKWebView with a custom right-click menu: the window is exactly the size of
+/// the card, so an in-page popup would have nowhere to draw.
+final class LampWebView: WKWebView {
+  var menuProvider: (() -> NSMenu?)?
+
+  override func menu(for event: NSEvent) -> NSMenu? {
+    menuProvider?() ?? super.menu(for: event)
+  }
+}
+
 final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKScriptMessageHandler {
   var window: NSWindow!
-  var web: WKWebView!
+  var web: LampWebView!
   var url: URL!
   var fails = 0
   var revealed = false
@@ -19,6 +39,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
   private let minSize = NSSize(width: 26, height: 24)
   private let maxSize = NSSize(width: 760, height: 420)
 
+  /// `$HOME` first, the same way the host resolves it, so both halves of the
+  /// plugin agree on where state lives (and a test can point it somewhere else).
+  private let prefsPath = URL(
+    fileURLWithPath: ProcessInfo.processInfo.environment["HOME"] ?? NSHomeDirectory()
+  ).appendingPathComponent(".dsh/xy-dsh-lamp-window.json")
+  private var collapsed = false
+  private var saveSoon: DispatchWorkItem?
+  private var startRect: NSRect?
+
   func applicationDidFinishLaunching(_ notification: Notification) {
     guard CommandLine.arguments.count > 1, let page = URL(string: CommandLine.arguments[1]) else {
       NSApp.terminate(nil)
@@ -29,12 +58,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     // Provisional size; the page reports its real content size right after load.
     let start = NSSize(width: 176, height: 65)
     let screen = NSScreen.main?.visibleFrame ?? NSRect(x: 40, y: 40, width: 800, height: 600)
-    let rect = NSRect(
+    let fallback = NSRect(
       x: screen.minX + 12,
       y: screen.maxY - start.height - 12,
       width: start.width,
       height: start.height
     )
+    let prefs = loadPrefs()
+    collapsed = prefs?.collapsed ?? false
+    var rect = fallback
+    if let saved = prefs {
+      let height = min(max(CGFloat(saved.h), minSize.height), maxSize.height)
+      let candidate = NSRect(
+        x: CGFloat(saved.x), y: CGFloat(saved.y), width: start.width, height: height)
+      if isOnScreen(candidate) {
+        rect.origin = candidate.origin
+        rect.size.height = height
+      }
+    }
+    startRect = rect
 
     window = NSWindow(
       contentRect: rect,
@@ -70,19 +112,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     let config = WKWebViewConfiguration()
     config.userContentController.add(self, name: "size")
     config.userContentController.add(self, name: "drag")
+    config.userContentController.add(self, name: "menu")
     config.suppressesIncrementalRendering = true
 
-    web = WKWebView(frame: root.bounds, configuration: config)
+    web = LampWebView(frame: root.bounds, configuration: config)
     web.autoresizingMask = [.width, .height]
     web.navigationDelegate = self
     web.setValue(false, forKey: "drawsBackground")
+    web.menuProvider = { [weak self] in self?.buildMenu() }
     web.load(URLRequest(url: page, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 5))
 
     root.addSubview(web)
     window.contentView = root
     window.orderFrontRegardless()
 
-    Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
+    // Liveness probe. Deliberately independent of the page: a wedged page or a
+    // crashed host must still take the board down. Runs at 5s because the page
+    // is already polling /api at 400ms for its own data.
+    Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
       self?.watch()
     }
     // Never stay invisible if the page fails to report a size.
@@ -92,9 +139,78 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
   }
 
   func applicationWillTerminate(_ notification: Notification) {
+    savePrefs()
     let controller = web?.configuration.userContentController
     controller?.removeScriptMessageHandler(forName: "size")
     controller?.removeScriptMessageHandler(forName: "drag")
+    controller?.removeScriptMessageHandler(forName: "menu")
+  }
+
+  /// The page finished loading: restore the collapsed face if that is how the
+  /// board was left, otherwise the window would pop open on every restart.
+  func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+    guard collapsed else { return }
+    webView.evaluateJavaScript("window.__lampSetCollapsed && window.__lampSetCollapsed(true)")
+  }
+
+  private func buildMenu() -> NSMenu {
+    let menu = NSMenu()
+    let reset = NSMenuItem(title: "回到左上角", action: #selector(resetPosition), keyEquivalent: "")
+    reset.target = self
+    menu.addItem(reset)
+    menu.addItem(.separator())
+    let quit = NSMenuItem(title: "退出灯板", action: #selector(quitBoard), keyEquivalent: "")
+    quit.target = self
+    menu.addItem(quit)
+    return menu
+  }
+
+  @objc private func resetPosition() {
+    guard let start = startRect else { return }
+    let screen = NSScreen.main?.visibleFrame ?? start
+    window.setFrameOrigin(NSPoint(x: screen.minX + 12, y: screen.maxY - window.frame.height - 12))
+    scheduleSave()
+  }
+
+  @objc private func quitBoard() {
+    NSApp.terminate(nil)
+  }
+
+  private func loadPrefs() -> LampPrefs? {
+    do {
+      let data = try Data(contentsOf: prefsPath)
+      let prefs = try JSONDecoder().decode(LampPrefs.self, from: data)
+      return prefs
+    } catch {
+      return nil
+    }
+  }
+
+  /// Coalesce writes: a drag fires many position changes per second.
+  private func scheduleSave() {
+    saveSoon?.cancel()
+    let work = DispatchWorkItem { [weak self] in self?.savePrefs() }
+    saveSoon = work
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.6, execute: work)
+  }
+
+  private func savePrefs() {
+    let prefs = LampPrefs(
+      x: Double(window.frame.minX),
+      y: Double(window.frame.minY),
+      h: Double(window.frame.height),
+      collapsed: collapsed
+    )
+    do {
+      try FileManager.default.createDirectory(
+        at: prefsPath.deletingLastPathComponent(), withIntermediateDirectories: true)
+      try JSONEncoder().encode(prefs).write(to: prefsPath, options: .atomic)
+    } catch {}
+  }
+
+  /// Keep a remembered position only if it still lands on a connected display.
+  private func isOnScreen(_ rect: NSRect) -> Bool {
+    NSScreen.screens.contains { $0.visibleFrame.intersects(rect) }
   }
 
   private func reveal() {
@@ -111,6 +227,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     switch message.name {
     case "size": applySize(body)
     case "drag": applyDrag(body)
+    case "menu":
+      // `in: nil` means the point is read as screen coordinates.
+      buildMenu().popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
     default: break
     }
   }
@@ -134,6 +253,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
       display: true
     )
     window.invalidateShadow()
+    scheduleSave()
     reveal()
   }
 
@@ -157,6 +277,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
       if dx != 0 || dy != 0 {
         window.setFrameOrigin(
           NSPoint(x: window.frame.minX + dx, y: window.frame.minY + dy))
+        scheduleSave()
       }
     default:
       let wasClick = dragTravel < clickSlop

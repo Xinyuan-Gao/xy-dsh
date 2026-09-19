@@ -34,7 +34,7 @@ Agent 代号在中文下也会跟着变：`ROOT` → `主`，`A1` / `A2` → `�
 
 ## 移动
 
-**整块灯板都能拖**（鼠标是抓手），标题栏右侧的 `中` / `EN` 和 `−` 两个按钮除外。位置不会跨重启保留。
+**整块灯板都能拖**（鼠标是抓手），标题栏右侧的 `中` / `EN` 和 `−` 两个按钮除外。位置会记住，重启 DSH 后回到原处；记下的位置如果落在已断开的显示器上，会自动退回左上角。
 
 AppKit 自带的拖拽（`performDrag`、`isMovableByWindowBackground`）对「无边框 + 透明」窗口完全不生效——四种组合都实测过，一律直接返回。而这个 WKWebView 的 `window.screenX/screenY` 返回的是垃圾值（实测 `0` / 屏幕高度），页面也报不出屏幕坐标。所以拖动是这样做的：页面只负责在 `pointerdown / pointermove / pointerup` 时报「指针动了」，宿主用 `NSEvent.mouseLocation` 读真实光标位置，按增量搬窗口。
 
@@ -70,7 +70,9 @@ AppKit 自带的拖拽（`performDrag`、`isMovableByWindowBackground`）对「�
 
 > 早先的版本只挑「一个」主会话显示，于是你在 A 项目跑着、B 项目也跑着的时候，B 会整个不见——包括它下面的子 Agent。现在改成全部列出。
 
-标题栏右侧的 `−` 把灯板**收起成一个灯**：一个圆角小方块，里面一盏灯表示整体状态，鼠标悬停显示 `状态 用时 · 会话标题`。点这个小方块展开，拖它则只移位。收起状态不跨重启保留。
+标题栏右侧的 `−` 把灯板**收起成一个灯**：一个圆角小方块，里面一盏灯表示整体状态，鼠标悬停显示 `状态 用时 · 各会话名字与标题`（多会话时全都列出来）。点这个小方块展开，拖它则只移位。收起状态会记住，重启后还是收起的。
+
+**右键**出菜单：`回到左上角` / `退出灯板`。窗口正好只有卡片那么大，页面内的弹出层没地方画，所以菜单是宿主弹的原生菜单。
 
 灯色（灯板与收起态一致）：
 
@@ -86,11 +88,11 @@ AppKit 自带的拖拽（`performDrag`、`isMovableByWindowBackground`）对「�
 
 ## 等你
 
-琥珀闪表示**有审批卡在你这里**。这个状态听的是 `approval/asked` 和 `approval/decided` 两个 session 事件。
+琥珀闪表示**有东西卡在你这里**，两种情况：审批待处理，或者 `ask_user_question` 问出去了还没答。
 
 不能用 `turn/end` 判断：审批期间 turn 是**开着的**（`approval.request()` 要求 turn 未结束），agent 状态一路都是 `running`，`turn/end` 根本不会来。只有 turn 已经结束、reason 是 `blocked` 时才走那条老路（实测在你自己的会话里从没出现过）。
 
-已知缺口：`ask_user_question` 那条路没接。它走的是 `user-questions/request` waterfall 钩子，不是 session 事件，所以提问时灯不会闪。
+`ask_user_question` 也接上了。它走的是 `user-questions/request` waterfall 钩子而不是审计事件，但那个待处理的 `tool/call`（名字正好是 `ask_user_question`）会落在 session 日志里，用 `callId` 和 `tool/result` 配对即可。其他工具调用不会误判成等待。
 
 ## 安装
 
@@ -125,4 +127,5 @@ dsh plugin --profile desktop add link:"$PWD/xy-dsh-lamp"
     notify: true
     sound: true
     lang: zh      # zh | en，只决定首次安装的默认语言
+    forgetMs: 600000   # 已完成会话在内存里保留多久（下限 180000）
 ```

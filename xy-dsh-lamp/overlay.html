@@ -234,7 +234,6 @@
     // Once the button is used, the local choice wins: a poll that started
     // before the POST landed must not flip the labels back.
     let langPinned = false
-    let lastTitle = ''
     let lastData = { mark: 'IDLE', note: 'ROOT', elapsedMs: 0, agents: [] }
 
     const L = () => LANGS[lang] || LANGS.zh
@@ -285,7 +284,6 @@
       const agents = sessions.flatMap((s) => (Array.isArray(s.agents) ? s.agents : []))
       const state = overall(lastData, agents)
       const isDone = state === 'done'
-      lastTitle = lastData.title || ''
       if (!langPinned && (lastData.lang === 'zh' || lastData.lang === 'en')) lang = lastData.lang
 
       // A finished run folds to a single line: DONE  <done>/<total>  <clock>
@@ -316,9 +314,15 @@
       el.lang.title = L().swap
       el.fold.title = L().fold
       el.minilamp.dataset.state = state
-      el.mini.title =
-        `${L().mark[state] || L().mark.idle}${line ? ' ' + line : ''}  ${fmt(lastData.elapsedMs)}`
-        + `${lastTitle ? '  ·  ' + lastTitle : ''}`
+      // Every session, not just the first: with three projects running the
+      // tooltip is the only place the whole picture fits.
+      const who = sessions
+        .map((s) => [s.name, s.title].filter(Boolean).join(' '))
+        .filter(Boolean)
+        .join('  ·  ')
+      const head = `${L().mark[state] || L().mark.idle}${line ? ' ' + line : ''}`
+        + `${count > 1 ? '  ' + L().sessions(count) : ''}  ${fmt(lastData.elapsedMs)}`
+      el.mini.title = (who ? `${head}  ·  ${who}` : head).slice(0, 240)
 
       el.card.hidden = collapsed
       el.mini.hidden = !collapsed
@@ -370,17 +374,20 @@
       })
     }
 
-    /* Report the natural content size so the host can fit the window to it. */
+    /* Report the natural content size so the host can fit the window to it.
+       `collapsed` rides along so the host can persist which face is showing. */
     let sentW = 0
     let sentH = 0
+    let sentCollapsed = null
     function syncSize() {
       const box = (collapsed ? el.mini : el.card).getBoundingClientRect()
       const w = Math.ceil(box.width)
       const h = Math.ceil(box.height)
-      if (w === sentW && h === sentH) return
+      if (w === sentW && h === sentH && collapsed === sentCollapsed) return
       sentW = w
       sentH = h
-      try { window.webkit.messageHandlers.size.postMessage({ w, h }) } catch {}
+      sentCollapsed = collapsed
+      try { window.webkit.messageHandlers.size.postMessage({ w, h, collapsed }) } catch {}
     }
 
     function toggle(next) {
@@ -391,6 +398,11 @@
       sentW = 0
       sentH = 0
       syncSize()
+    }
+
+    // The host restores the remembered face once the page has loaded.
+    window.__lampSetCollapsed = (v) => {
+      if (collapsed !== Boolean(v)) toggle(Boolean(v))
     }
 
     el.fold.addEventListener('click', (e) => { e.stopPropagation(); toggle(true) })
@@ -447,6 +459,13 @@
     document.addEventListener('pointermove', onMove, true)
     document.addEventListener('pointerup', onUp, true)
     document.addEventListener('pointercancel', onUp, true)
+
+    // The window is exactly the size of the card, so an in-page popup would be
+    // clipped. Hand the gesture to the host, which pops a native menu.
+    document.addEventListener('contextmenu', (e) => {
+      e.preventDefault()
+      try { window.webkit.messageHandlers.menu.postMessage({}) } catch {}
+    })
 
     async function tick() {
       try {
