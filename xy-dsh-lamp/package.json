@@ -18,7 +18,6 @@
     ".": {
       "default": "./index.mjs"
     },
-    "./client": "./client/index.mjs",
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
   },
@@ -26,7 +25,6 @@
     "index.mjs",
     "overlay.html",
     "hud.swift",
-    "client",
     "cordis.patch.yml",
     "README.md"
   ]

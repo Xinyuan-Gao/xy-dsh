@@ -11,6 +11,7 @@
       --edge: rgba(255, 255, 255, .10);
       --sheen: rgba(255, 255, 255, .05);
       --amber: #ffa02f;
+      --wait: #3fa9ff;
       --up: #00b96b;
       --down: #f23645;
       --mute: #5e6680;
@@ -60,6 +61,7 @@
     }
     .head[data-flat="1"] { border-bottom: 0; padding-bottom: 6px; }
     .mark { color: var(--amber); font-weight: 500; letter-spacing: .02em; }
+    .head[data-tone="wait"] .mark { color: var(--wait); }
     .head[data-tone="idle"] .mark { color: var(--mute); }
     .head[data-tone="err"] .mark { color: var(--down); }
     .head[data-tone="ok"] .mark { color: var(--up); }
@@ -145,7 +147,7 @@
     .lamp { width: 6px; height: 6px; background: var(--c, var(--idle)); flex: 0 0 auto; }
     .lamp[data-state="idle"] { --c: var(--idle); }
     .lamp[data-state="run"] { --c: var(--amber); }
-    .lamp[data-state="wait"] { --c: var(--amber); animation: blink 1s steps(1) infinite; }
+    .lamp[data-state="wait"] { --c: var(--wait); animation: blink 1s steps(1) infinite; }
     .lamp[data-state="err"] { --c: var(--down); }
     .lamp[data-state="done"] { --c: var(--up); }
     @keyframes blink { 0%, 49% { opacity: 1 } 50%, 100% { opacity: .3 } }
@@ -296,7 +298,8 @@
       const count = Number(lastData.count) || sessions.length
       const hidden = Math.max(0, count - sessions.length)
 
-      el.head.dataset.tone = state === 'err' ? 'err' : state === 'idle' ? 'idle' : isDone ? 'ok' : 'run'
+      el.head.dataset.tone =
+        state === 'err' ? 'err' : state === 'wait' ? 'wait' : state === 'idle' ? 'idle' : isDone ? 'ok' : 'run'
       el.head.dataset.flat = isDone ? '1' : '0'
       el.mark.textContent = L().mark[state] || L().mark.idle
       el.note.textContent = isDone
