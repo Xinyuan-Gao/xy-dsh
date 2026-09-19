@@ -111,6 +111,32 @@
     .lang:hover { border-color: var(--amber); color: var(--amber); }
     .lang:active { background: var(--line); }
 
+    /* Quitting costs a DSH restart to undo, so it takes two clicks. */
+    .quit {
+      flex: 0 0 auto;
+      height: 15px;
+      min-width: 15px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 3px;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      background: transparent;
+      color: var(--mute);
+      font: inherit;
+      font-size: 10px;
+      line-height: 1;
+      cursor: pointer;
+      -webkit-appearance: none;
+    }
+    .quit:hover { border-color: var(--down); color: var(--down); }
+    .quit[data-armed="1"] {
+      border-color: var(--down);
+      background: var(--down);
+      color: var(--ink);
+    }
+
     /* One row per session; the left column names the project. */
     .rows { display: flex; flex-direction: column; }
     .rows[hidden] { display: none; }
@@ -150,7 +176,8 @@
     .lamp[data-state="wait"] { --c: var(--wait); animation: blink 1s steps(1) infinite; }
     .lamp[data-state="err"] { --c: var(--down); }
     .lamp[data-state="done"] { --c: var(--up); }
-    @keyframes blink { 0%, 49% { opacity: 1 } 50%, 100% { opacity: .3 } }
+    /* The dim phase must stay recognisably blue: at .3 it read as the idle grey. */
+    @keyframes blink { 0%, 49% { opacity: 1 } 50%, 100% { opacity: .55 } }
     @media (prefers-reduced-motion: reduce) { .lamp { animation: none !important } }
 
     /* ---- collapsed: a single lamp ---- */
@@ -158,7 +185,10 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 30px;
+      gap: 4px;
+      /* min-width, not width: the box has to grow with the lamp count. */
+      min-width: 30px;
+      padding: 0 6px;
       height: 30px;
       background: var(--bg);
       border: 1px solid var(--edge);
@@ -170,7 +200,8 @@
     }
     .mini[hidden] { display: none; }
     .mini:active { cursor: grabbing; }
-    .mini .lamp { width: 10px; height: 10px; border-radius: 3px; }
+    /* One lamp per running task, not one summary lamp. */
+    .mini .lamp { width: 8px; height: 8px; border-radius: 2px; flex: 0 0 auto; }
   </style>
 </head>
 <body>
@@ -182,13 +213,12 @@
       <span class="clock" id="clock">00:00:00</span>
       <button class="lang" id="lang" type="button">中</button>
       <button class="fold" id="fold" type="button" title="收起灯板">&#8722;</button>
+      <button class="quit" id="quit" type="button" title="退出灯板">&#215;</button>
     </div>
     <div class="rows" id="rows"></div>
   </div>
 
-  <div class="mini" id="mini" title="展开灯板" hidden>
-    <span class="lamp" id="minilamp" data-state="idle"></span>
-  </div>
+  <div class="mini" id="mini" title="展开灯板" hidden></div>
 
   <script>
     /* Two label sets. `mark` is the headline word in the header, `cell` is the
@@ -204,6 +234,8 @@
         fold: '收起灯板',
         unfold: '展开灯板',
         swap: '切换中英文',
+        quit: '退出灯板',
+        quitConfirm: '再点一次确认退出（重启 DSH 才会回来）',
         sessions: (n) => `${n} 个会话`,
       },
       en: {
@@ -214,6 +246,8 @@
         fold: 'Collapse board',
         unfold: 'Expand board',
         swap: 'Switch language',
+        quit: 'Quit the board',
+        quitConfirm: 'Click again to confirm (needs a DSH restart to return)',
         sessions: (n) => `${n} sessions`,
       },
     }
@@ -227,8 +261,8 @@
       rows: document.getElementById('rows'),
       fold: document.getElementById('fold'),
       lang: document.getElementById('lang'),
+      quit: document.getElementById('quit'),
       mini: document.getElementById('mini'),
-      minilamp: document.getElementById('minilamp'),
     }
 
     // The host injects this before the page runs, so the first painted frame is
@@ -318,7 +352,7 @@
       el.lang.textContent = lang === 'zh' ? '中' : 'EN'
       el.lang.title = L().swap
       el.fold.title = L().fold
-      el.minilamp.dataset.state = state
+      renderMini(sessions, state)
       // Every session, not just the first: with three projects running the
       // tooltip is the only place the whole picture fits.
       const who = sessions
@@ -332,6 +366,23 @@
       el.card.hidden = collapsed
       el.mini.hidden = !collapsed
       syncSize()
+    }
+
+    /* The collapsed face carries one lamp per session. Same rule as the rows:
+       rebuild only when the lamp count changes, or the wait blink restarts. */
+    let miniShape = null
+
+    function renderMini(sessions, fallback) {
+      const states = (sessions.length ? sessions : [{ state: fallback }]).map((s) => s.state || 'idle')
+      const shape = String(states.length)
+      if (shape !== miniShape) {
+        miniShape = shape
+        el.mini.innerHTML = states.map(() => '<span class="lamp" data-state="idle"></span>').join('')
+      }
+      const lamps = el.mini.children
+      states.forEach((st, i) => {
+        if (lamps[i]) lamps[i].dataset.state = st
+      })
     }
 
     /* Rows are rebuilt only when their SHAPE changes. The poll runs every 400ms
@@ -412,6 +463,32 @@
 
     el.fold.addEventListener('click', (e) => { e.stopPropagation(); toggle(true) })
 
+    let quitArmed = false
+    let quitTimer = null
+
+    function disarmQuit() {
+      quitArmed = false
+      if (quitTimer) clearTimeout(quitTimer)
+      quitTimer = null
+      el.quit.dataset.armed = '0'
+      el.quit.textContent = '\u00d7'
+      el.quit.title = L().quit
+    }
+
+    el.quit.addEventListener('click', (e) => {
+      e.stopPropagation()
+      if (!quitArmed) {
+        quitArmed = true
+        el.quit.dataset.armed = '1'
+        el.quit.textContent = '确认'
+        el.quit.title = L().quitConfirm
+        quitTimer = setTimeout(disarmQuit, 3000)
+        return
+      }
+      disarmQuit()
+      try { window.webkit.messageHandlers.quit.postMessage({}) } catch {}
+    })
+
     el.lang.addEventListener('click', (e) => {
       e.stopPropagation()
       lang = lang === 'zh' ? 'en' : 'zh'
@@ -437,7 +514,7 @@
 
     function onDown(e) {
       if (e.button !== 0) return
-      if (e.target.closest && e.target.closest('.fold, .lang')) return
+      if (e.target.closest && e.target.closest('.fold, .lang, .quit')) return
       dragging = true
       sendDrag('start')
       // Capture on a stable node: the cell markup is replaced on every repaint.

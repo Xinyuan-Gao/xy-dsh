@@ -113,6 +113,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
     config.userContentController.add(self, name: "size")
     config.userContentController.add(self, name: "drag")
     config.userContentController.add(self, name: "menu")
+    config.userContentController.add(self, name: "quit")
     // Tell the page which face to start in BEFORE it runs, rather than
     // correcting it after load. Correcting afterwards would flash the expanded
     // board first, and the page's own first size report would race the fix.
@@ -151,6 +152,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
     controller?.removeScriptMessageHandler(forName: "size")
     controller?.removeScriptMessageHandler(forName: "drag")
     controller?.removeScriptMessageHandler(forName: "menu")
+    controller?.removeScriptMessageHandler(forName: "quit")
   }
 
   private func buildMenu() -> NSMenu {
@@ -227,6 +229,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
     switch message.name {
     case "size": applySize(body)
     case "drag": applyDrag(body)
+    case "quit": NSApp.terminate(nil)
     case "menu":
       // `in: nil` means the point is read as screen coordinates.
       buildMenu().popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
