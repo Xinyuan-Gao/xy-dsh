@@ -10,6 +10,7 @@
 |---|---|---|
 | `host.test.mjs` | 宿主逻辑：多会话分行、审批与提问两种「等你」、地图清理、父行钉住、语言偏好、死字段 | Node |
 | `hud-lifecycle.test.mjs` | HUD 进程：`killOldHud` 真的杀掉 pid 文件指的那个进程；`hud.swift` 编不过时保留旧二进制照常起灯板 | macOS + `swiftc`（缺 `swiftc` 时跳过编译那半） |
+| `question-nav.test.mjs` | 提问导航：浏览器包按真实模块系统契约注册（`window.__ModuleLoader__` 工厂）、`apply()` 挂三个槽位、主题层与样式表插入 | Node |
 | `overlay.test.py` | 页面：多会话渲染、**DOM diff 不变量**、等你灯真的在闪、拖拽消息序列、右键交宿主、旧宿主格式兜底 | Python + playwright + Pillow |
 | `collapsed.test.py` | 收起态：一个任务一盏灯、宽度跟着灯数、等你灯在收起态也闪、关闭按钮两次点击 | 同上 |
 | `backgrounds.test.py` | 背景：五种各自生效、注入即首帧、运行中切换会回报、非法值被忽略、菜单清单由页面提供 | 同上 |
@@ -31,6 +32,7 @@ python -m playwright install webkit
 - 编译回退 —— 改坏一行 Swift 曾经等于灯板彻底消失，而 `execFileSync` 失败还可能截断一个本来能用的二进制。
 - 收起态宽度 —— `.mini` 是固定 `width: 30px`（原本单灯设计），三盏灯直接溢出被裁。灯数对**不等于**窗口大小对，所以几何单独断言。
 - 关闭按钮两次点击 —— 退出后要重启 DSH 才回来，误触的代价太大。
+- 提问导航的装载契约 —— 这个插件的浏览器包原本写成**裸 ES module**（顶层 `export`），而宿主是把它当 classic script 发给页面的，浏览器第一行就 `Unexpected token 'export'`，插件等于没装；同一份 `apply()` 还调用了一个从未定义的 `styles` 助手，挂载时直接抛。两处都不影响读代码时的观感，所以 `question-nav.test.mjs` 按真实契约装载：先捕获 `window.__ModuleLoader__.load({ id, factory })` 的注册，再物化工厂、跑 `apply()`，并断言 `apply()` 返回 `undefined`（Cordis 会执行 effect 的返回值，返回非函数即加载失败）。
 
 ## 兼容性验证
 
@@ -38,6 +40,7 @@ python -m playwright install webkit
 
 ```bash
 ./test/compat-releases.sh xy-dsh-lamp 0.1.5-rc.2
+./test/compat-releases.sh xy-dsh-question-nav            # 三个插件走同一套检查
 DSH_COMPAT_EXTRA_DEP="@deepseek-ai/dsh-app-boot@0.1.6-alpha.1" \
   ./test/compat-releases.sh xy-dsh-lamp 0.1.6-alpha.1   # 钉住上游坏掉的依赖范围
 ```

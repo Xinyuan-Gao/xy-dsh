@@ -9,7 +9,7 @@
 
 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 插件集合。
 
-*Plugins for DeepSeek Harness — an always-on-top agent lamp board for macOS, plus a context lens.*
+*Plugins for DeepSeek Harness — an always-on-top agent lamp board for macOS, a context lens, and a question navigator.*
 
 <p align="center"><img src="docs/lamp-sessions.png" alt="三个项目并行时的灯板"></p>
 
@@ -19,10 +19,13 @@
 |---|---|---|
 | **[xy-dsh-lamp](./xy-dsh-lamp)** | macOS 置顶灯板，一个 Agent 一盏灯 | 日常在用 |
 | [xy-dsh-context](./xy-dsh-context) | 输入区上方的 Context Lens | 原型 |
+| [xy-dsh-question-nav](./xy-dsh-question-nav) | 输入框上方的当前提问，可回退到任意一轮 | 原型 |
 
 **灯板**：置顶浮窗（不占 DSH 位置）、一 Agent 一灯、多会话分行、收起成一排小灯、五种背景、中英切换、拖动与位置记忆、审批与提问时蓝灯闪烁、根 Agent 结束发系统通知。
 
 **Context Lens**：显示 Turns / Steps / Cache hit / Output，挂在输入区上方、会话标题栏和侧栏三处。
+
+**提问导航**：输入框上方常驻当前提问，点箭头拉出按时间排列的历次提问，点任意一条把对话视图回退到那一轮；页头另有「问答总览」抽屉。回退只移动对话视口，不回滚任何会话内容。
 
 ## 装
 
@@ -32,10 +35,11 @@
 dsh plugin --profile desktop add "github:Xinyuan-Gao/xy-dsh#path:xy-dsh-lamp"
 ```
 
-Context Lens：
+Context Lens 与提问导航：
 
 ```bash
 dsh plugin --profile web add "github:Xinyuan-Gao/xy-dsh#path:xy-dsh-context"
+dsh plugin --profile web add "github:Xinyuan-Gao/xy-dsh#path:xy-dsh-question-nav"
 ```
 
 装完重启 DSH Desktop，或重启 `dsh web`。要更新就重跑同一条命令。
@@ -66,7 +70,7 @@ dsh plugin --profile desktop add link:"$PWD/xy-dsh-lamp"
 
 ## 兼容性
 
-两个插件都在各自的 `package.json` 里逐版本声明与 `@deepseek-ai/dsh` 的兼容性（`dsh.compatibility.dshReleases`），并配了可复现的证据脚本：每个官方 release 在一次性 `DSH_HOME` 里跑 install → compose → uninstall。
+三个插件都在各自的 `package.json` 里逐版本声明与 `@deepseek-ai/dsh` 的兼容性（`dsh.compatibility.dshReleases`），并配了可复现的证据脚本：每个官方 release 在一次性 `DSH_HOME` 里跑 install → compose → uninstall。
 
 当前声明与验证结果见 **[COMPATIBILITY.md](./COMPATIBILITY.md)**。
 
@@ -76,7 +80,7 @@ dsh plugin --profile desktop add link:"$PWD/xy-dsh-lamp"
 ./test/run.sh
 ```
 
-四套、共 60 条断言：宿主逻辑（Node，任何平台）、HUD 进程生命周期（macOS）、页面渲染与交互、收起态与背景（后两套要 playwright）。
+六套、共 75 条断言：宿主逻辑（Node，任何平台）、HUD 进程生命周期（macOS）、提问导航的模块注册与挂载（Node）、页面渲染与交互、收起态与背景（后三套要 playwright）。
 
 每套都在自己的临时 HOME 里跑，不会碰你真实的 `~/.dsh`。细节和「每条断言对应哪个真实问题」见 [test/README.md](./test/README.md)。
 

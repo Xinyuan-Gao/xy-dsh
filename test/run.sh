@@ -39,6 +39,7 @@ run_python() {
 
 run_node host.test.mjs "宿主逻辑：多会话 / 审批 / 提问 / 清理 / 语言"
 run_node hud-lifecycle.test.mjs "HUD 进程：killOldHud 与编译回退"
+run_node question-nav.test.mjs "提问导航：模块注册 / apply 挂载三个槽位 / 主题层"
 run_python overlay.test.py "页面：渲染 / DOM diff / 闪烁 / 拖拽 / 右键"
 run_python collapsed.test.py "收起态：一个任务一盏灯 / 关闭按钮"
 run_python backgrounds.test.py "背景：五种可选 / 注入无闪烁 / 落盘往返"
