@@ -40,7 +40,7 @@ python -m playwright install webkit
 
 ```bash
 ./test/compat-releases.sh xy-dsh-lamp 0.1.5-rc.2
-./test/compat-releases.sh xy-dsh-question-nav            # 三个插件走同一套检查
+./test/compat-releases.sh xy-dsh-question-nav            # 两个插件走同一套检查
 DSH_COMPAT_EXTRA_DEP="@deepseek-ai/dsh-app-boot@0.1.6-alpha.1" \
   ./test/compat-releases.sh xy-dsh-lamp 0.1.6-alpha.1   # 钉住上游坏掉的依赖范围
 ```

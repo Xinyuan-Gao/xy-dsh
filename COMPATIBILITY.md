@@ -1,6 +1,6 @@
 # DSH 兼容性
 
-三个插件都在 `package.json` 的 `dsh.compatibility.dshReleases` 里**逐版本**声明与 `@deepseek-ai/dsh` 的兼容性。逐版本声明是必须的：宽泛范围不会被接受，DSH STORE 要求每个完整版本各自给出 `compatible` / `incompatible` / `unknown`。
+两个插件都在 `package.json` 的 `dsh.compatibility.dshReleases` 里**逐版本**声明与 `@deepseek-ai/dsh` 的兼容性。逐版本声明是必须的：宽泛范围不会被接受，DSH STORE 要求每个完整版本各自给出 `compatible` / `incompatible` / `unknown`。
 
 ```json
 "dsh": {
@@ -21,7 +21,6 @@
 
 ```bash
 ./test/compat-releases.sh xy-dsh-lamp
-./test/compat-releases.sh xy-dsh-context
 ./test/compat-releases.sh xy-dsh-question-nav
 ```
 
@@ -43,7 +42,7 @@
 | `0.1.6-alpha.1` | **unknown** | ❌ 见下 | — | — | 2026-09-19 |
 | `0.1.6-alpha.2` | compatible | ✅ | ✅ 1 行 | ✅ 0 行 | 2026-09-19 |
 
-三个插件共用这张表 —— 检查走的是同一个脚本，结果与插件无关（`xy-dsh-question-nav` 是 2026-09-20 并入后按同一脚本复核的，逐版本结论一致）。下表是 `0.1.6-alpha.1` 的例外细节，同样对三个插件成立。
+两个插件共用这张表 —— 检查走的是同一个脚本，结果与插件无关（`xy-dsh-question-nav` 是 2026-09-20 并入后按同一脚本复核的，逐版本结论一致）。下表是 `0.1.6-alpha.1` 的例外细节，同样对两个插件成立。
 
 ### 为什么 `0.1.6-alpha.1` 是 unknown 而不是 incompatible
 
@@ -79,4 +78,4 @@ DSH_COMPAT_EXTRA_DEP="@deepseek-ai/dsh-app-boot@0.1.6-alpha.1" \
 
 这些检查证明的是：**在四个官方 release 各自的真实 CLI 上，插件能安装、能组合进 profile 配置、能卸载**。
 
-它们不是完整的运行时验收：灯板的窗口、通知、收起态，以及 Context Lens、提问导航的界面，都没有在这些一次性 profile 里实际渲染过——一次性 profile 只装插件并组合配置，不会启动 GUI。灯板的运行证据来自本机 DSH Desktop 2.0.9（内置 `0.1.5-rc.1`）的日常使用，以及 `test/host.test.mjs`、`test/overlay.test.py` 那几套；提问导航的浏览器半场由 `test/question-nav.test.mjs` 按真实模块系统契约（`window.__ModuleLoader__` 工厂）装载并断言槽位注册。
+它们不是完整的运行时验收：灯板的窗口、通知、收起态，以及提问导航的界面，都没有在这些一次性 profile 里实际渲染过——一次性 profile 只装插件并组合配置，不会启动 GUI。灯板的运行证据来自本机 DSH Desktop 2.0.9（内置 `0.1.5-rc.1`）的日常使用，以及 `test/host.test.mjs`、`test/overlay.test.py` 那几套；提问导航的浏览器半场由 `test/question-nav.test.mjs` 按真实模块系统契约（`window.__ModuleLoader__` 工厂）装载并断言槽位注册。
