@@ -57,10 +57,14 @@ theme.overrideTokens('xy-dsh-question-nav/accent', {
 本插件是 [xy-dsh](https://github.com/Xinyuan-Gao/xy-dsh) 集合仓库的一个子目录，安装时用 pnpm 的 `#path:` 片段指定目录：
 
 ```bash
-dsh plugin --profile web add "github:Xinyuan-Gao/xy-dsh#path:xy-dsh-question-nav"
+# DSH Desktop 用 desktop；`dsh web` 用 web。装错 profile 的表现是
+# 「刷新了页面但什么都没有」。
+dsh plugin --profile desktop add "github:Xinyuan-Gao/xy-dsh#path:xy-dsh-question-nav"
 ```
 
 装完重启 DSH Desktop，或重启 `dsh web`。要更新就重跑同一条命令。
+
+> **重启后就没了？** 那说明它没被装成 profile bundle。DSH 的**动态 Cordis 包**只在当前进程里有效，电脑或 DSH 一重启就消失；只有 `dsh plugin add` 装进 profile 的包才会在每次启动时自动加载。本插件早期是作为动态包迭代的，所以踩过这个坑——用上面的命令装一次就固定下来。
 
 想改代码就 clone 下来、用 `link:` 装一份可编辑的：
 

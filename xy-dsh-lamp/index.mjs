@@ -356,7 +356,9 @@ export function apply(ctx, config = {}) {
   const prune = (now) => {
     const live = new Set()
     for (const a of agents.values()) {
-      if (a.state === 'run' || a.state === 'wait' || a.state === 'err') live.add(a.id)
+      // `err` is a FINISHED state, not an active one. Treating it as active kept
+      // every past failure in the map forever.
+      if (a.state === 'run' || a.state === 'wait') live.add(a.id)
     }
     // Never forget a parent whose subagent is still live, or the child would
     // have no row left to appear in.
@@ -380,7 +382,11 @@ export function apply(ctx, config = {}) {
     // "running" the agent still reports. Everything below reads `state`.
     const settled = [...agents.values()]
       .map((a) => (a.waiting && a.state === 'run' ? { ...a, state: 'wait' } : a))
-    const isActive = (a) => a.state === 'run' || a.state === 'wait' || a.state === 'err'
+    // A failure is worth showing, but it must not pin the board forever: one
+    // session failing once used to colour every later, unrelated run red, even
+    // after the same session succeeded again. `err` now ages out of the board
+    // exactly like `done` — the system notification is what covers "I was away".
+    const isActive = (a) => a.state === 'run' || a.state === 'wait'
     const activeParents = new Set(
       settled.filter(isActive).map((a) => a.parent).filter(Boolean))
     const live = settled.filter((a) => {

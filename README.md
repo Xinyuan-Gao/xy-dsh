@@ -35,8 +35,10 @@ dsh plugin --profile desktop add "github:Xinyuan-Gao/xy-dsh#path:xy-dsh-lamp"
 提问导航：
 
 ```bash
-dsh plugin --profile web add "github:Xinyuan-Gao/xy-dsh#path:xy-dsh-question-nav"
+dsh plugin --profile desktop add "github:Xinyuan-Gao/xy-dsh#path:xy-dsh-question-nav"
 ```
+
+> 提问导航是 **web UI** 插件，装到哪个 profile 取决于你怎么开 DSH：**DSH Desktop 用 `desktop`**，`dsh web` 用 `web`。装错 profile 的表现就是「刷新了页面但什么都没有」。
 
 装完重启 DSH Desktop，或重启 `dsh web`。要更新就重跑同一条命令。
 

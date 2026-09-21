@@ -155,6 +155,54 @@ try {
   check('doneText is gone from the wire', !('doneText' in snap))
   check('no redundant top-level title', !('title' in snap))
 
+  // --- 一次失败不能把灯板永久钉红 ---------------------------------------
+  // 曾经的 bug：err 被当成活跃状态，于是任何历史失败都永不清理、永不消失。
+  // 用户在另一个会话里早就继续干活了，灯板还是红的；子 agent 失败过一次、
+  // 主会话随后成功，那一行也永远红。
+  {
+    const F = root('session-fail', '/home/dev/projects/failer')
+    const G = root('session-good', '/home/dev/projects/other')
+    const FK = child('session-fail-1', '/home/dev/projects/failer', 'session-fail')
+
+    emit('session/event', F, { type: 'turn/start' })
+    emit('agent/status', { agent: { session: F }, status: 'running' })
+    emit('session/event', F, { type: 'turn/end', data: { reason: { kind: 'error' } } })
+    emit('agent/status', { agent: { session: F }, status: 'idle' })
+    const row = async () => (await api()).sessions.find((x) => x.name === 'failer')?.state
+    check('一次失败当下要看得见（红色）', (await row()) === 'err', String(await row()))
+
+    // 同一个会话再来一轮并成功 -> 不该还红
+    emit('session/event', F, { type: 'turn/start' })
+    emit('agent/status', { agent: { session: F }, status: 'running' })
+    check('同一会话重新跑起来就不该是红的', (await row()) === 'run', String(await row()))
+    emit('session/event', F, { type: 'turn/end', data: { reason: { kind: 'completed' } } })
+    emit('agent/status', { agent: { session: F }, status: 'idle' })
+    check('同一会话成功后是完成，不是出错', (await row()) === 'done', String(await row()))
+
+    // 另一条路：失败后用户改了别的会话，旧失败必须自己退场
+    emit('session/event', F, { type: 'turn/start' })
+    emit('agent/status', { agent: { session: F }, status: 'running' })
+    emit('session/event', FK, { type: 'turn/start' })
+    emit('agent/status', { agent: { session: FK }, status: 'running' })
+    emit('session/event', FK, { type: 'turn/end', data: { reason: { kind: 'error' } } })
+    emit('agent/status', { agent: { session: FK }, status: 'idle' })
+    emit('session/event', F, { type: 'turn/end', data: { reason: { kind: 'completed' } } })
+    emit('agent/status', { agent: { session: F }, status: 'idle' })
+    emit('session/event', G, { type: 'turn/start' })
+    emit('agent/status', { agent: { session: G }, status: 'running' })
+    check('子 agent 失败时那一行是红的', (await row()) === 'err', String(await row()))
+
+    const at = Date.now
+    Date.now = () => at() + 60_000
+    check('一分钟后失败还在（够你看清）', (await row()) === 'err', String(await row()))
+    Date.now = () => at() + 120_000
+    let s2 = await api()
+    check('过了保留期失败的会话退场，不再钉红灯板',
+      s2.mark !== 'ERR' && !s2.sessions.some((x) => x.name === 'failer'),
+      `mark=${s2.mark} rows=${s2.sessions.map((x) => x.name).join(',')}`)
+    Date.now = realNow
+  }
+
   // --- language preference
   let res = await fetch(new URL('/lang', page), { method: 'POST', body: 'en' })
   check('POST /lang replies with the value', (await res.text()) === 'en')
