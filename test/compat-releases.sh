@@ -11,7 +11,7 @@ PLUGIN="${1:-xy-dsh-lamp}"
 WORK="${DSH_COMPAT_DIR:-/tmp/dsh-compat}"
 VERSIONS=("${@:2}")
 if (( ${#VERSIONS[@]} == 0 )); then
-  VERSIONS=("0.1.5-rc.1" "0.1.5-rc.2" "0.1.6-alpha.1" "0.1.6-alpha.2")
+  VERSIONS=("0.1.5-rc.1" "0.1.5-rc.2" "0.1.6-alpha.1" "0.1.6-alpha.2" "0.2.0-rc.2")
 fi
 
 mkdir -p "$WORK"

@@ -3,7 +3,7 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](../LICENSE)
 [![macOS](https://img.shields.io/badge/platform-macOS-lightgrey.svg)](#装)
 [![Node](https://img.shields.io/badge/node-%3E%3D22.19.0-brightgreen.svg)](#装)
-[![DSH](https://img.shields.io/badge/dsh-0.1.5--rc.1%20%7C%200.1.5--rc.2%20%7C%200.1.6--alpha.2-blue.svg)](../COMPATIBILITY.md)
+[![DSH](https://img.shields.io/badge/dsh-0.1.5--rc.1%20%7C%200.1.5--rc.2%20%7C%200.1.6--alpha.2%20%7C%200.2.0--rc.2-blue.svg)](../COMPATIBILITY.md)
 [![Listed](https://img.shields.io/badge/awesome--dsh--plugin-listed-blueviolet.svg)](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin)
 
 **系统级置顶灯板。** 每个 Agent 一盏灯，全绿后收成一行 `完成 04/04`。
